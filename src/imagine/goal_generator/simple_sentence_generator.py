@@ -1,4 +1,5 @@
 from nltk import word_tokenize
+import numpy as np
 from src.imagine.goal_generator.descriptions import get_descriptions
 TRAIN_DESCR, TEST_DESCR, _ = get_descriptions()
 
