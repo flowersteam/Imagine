@@ -224,7 +224,7 @@ def configure_everything(rank, seed, num_cpu, env, trial_id, n_epochs, reward_fu
     params['repo_path'] = REPO_PATH
     params['lstm_reward_checkpoint_path'] = REPO_PATH + '/src/data/lstm_checkpoints/{}'.format(params['conditions']['reward_checkpoint'])
     params['or_params_path'] = dict()
-    for n_obj in range(3, 4):
+    for n_obj in [3]:
         params['or_params_path'][n_obj] = REPO_PATH + '/src/data/or_function/or_params_{}objs.pk'.format(n_obj)
 
     # Save parameter dict
@@ -308,19 +308,26 @@ def simple_goal_subtract(a, b):
 
 def configure_learning_algo(reward_function, goal_sampler, params, reuse=False, use_mpi=True):
     sample_her_transitions = configure_her(params, reward_function, goal_sampler)
-
+    params['dims'].update(action_max=1)
     # Learning agent
     params['learning_params'].update(input_dims=params['dims'].copy(),  # agent takes an input observations
                                      clip_pos_returns=True,  # clip positive returns
-                                     clip_return=(1. / (1. - params['learning_params']['gamma'])) if params['learning_params']['clip_return'] else np.inf,  # max abs of return
-                                     sample_transitions=sample_her_transitions,
+                                     clip_return=(1. / (1. - params['learning_params']['gamma'])) if
+                                     params['learning_params']['clip_return'] else np.inf,  # max abs of return
                                      goal_sampler=goal_sampler,
                                      policy_architecture=params['conditions']['policy_architecture'],
                                      reward_function=reward_function,
+                                     dims=params['dims'].copy(),
+                                     cuda=False,
+                                     logdir=params['experiment_params']['logdir'],
+                                     clip_range=5,
+                                     lr_actor=0.001,
+                                     lr_critic=0.001,
+                                     alpha=0.2,
                                      )
 
     if params['learning_params']['algo'] == 'ddpg':
-        policy = DDPG(reuse=reuse, use_mpi=use_mpi, params=params, **params['learning_params'])
+        policy = DDPG(params['learning_params'], sample_her_transitions)
     else:
         raise NotImplementedError
     return policy

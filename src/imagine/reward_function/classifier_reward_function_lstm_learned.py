@@ -2,12 +2,13 @@ from collections import deque
 import numpy as np
 import pandas as pd
 from mpi4py import MPI
-import tensorflow as tf
+
+import torch
 from src import logger
 from src.utils.reward_func_util import StateIdBuffer, Batch
 from src.utils.reward_func_util import get_metrics_by_instructions_lstm
-from src.imagine.reward_function.model_reward_function_lstm import RewardFunctionCastAttentionShareOr, RewardFunctionCastAttentionShareMax
-import pickle
+from src.imagine.reward_function.model import RewardFunctionModel
+
 
 class RewardFunctionLSTM:
     def __init__(self, goal_sampler, params):
@@ -19,7 +20,7 @@ class RewardFunctionLSTM:
         self.n_batch = params['reward_function']['n_batch']
         self.params = params
         self.freq_update = params['reward_function']['freq_update']
-        self.early_stopping =  params['reward_function']['early_stopping']
+        self.early_stopping = params['reward_function']['early_stopping']
         self.proportion_split_test = 0.2
         self.n_added_states = 0
         # Environment params read from params
@@ -29,27 +30,21 @@ class RewardFunctionLSTM:
         n_obj = len(inds_obj)
         state_size = params['dims']['obs']
         self.goal_sampler = goal_sampler
-        self.reward_function = RewardFunctionCastAttentionShareMax(or_params_path=params['or_params_path'],
-                                                                  body_size=body_size,
-                                                                  obj_size=obj_size,
-                                                                  n_obj=n_obj,
-                                                                  state_size=state_size,
-                                                                  voc_size=self.goal_sampler.one_hot_encoder.vocab.size,
-                                                                  sequence_length=goal_sampler.one_hot_encoder.max_seq_length,
-                                                                  batch_size=self.batch_size,
-                                                                  learning_rate=params['reward_function']['learning_rate'],
-                                                                  ff_size=params['reward_function']['ff_size'],
-                                                                  num_hidden_lstm=params['reward_function']['num_hidden_lstm']
-                                                                  )
+        self.reward_function = RewardFunctionModel(or_params_path=params['or_params_path'],
+                                                   body_size=body_size, obj_size=obj_size, n_obj=n_obj,
+                                                   state_size=state_size,
+                                                   voc_size=self.goal_sampler.one_hot_encoder.vocab.size,
+                                                   sequence_length=goal_sampler.one_hot_encoder.max_seq_length,
+                                                   batch_size=self.batch_size,
+                                                   num_hidden_lstm=params['reward_function']['num_hidden_lstm'])
+
+        self.optimizer = torch.optim.Adam(params=self.reward_function.get_params(),
+                                          lr=params['reward_function']['learning_rate'])
 
         self.size_encoding = self.reward_function.num_hidden_lstm
         self.nb_max_added_states = self.params['experiment_params']['n_cpus'] * \
                                    self.params['experiment_params']['n_cycles'] * \
                                    self.params['experiment_params']['rollout_batch_size']
-        # Create tensorflow session and init it
-        self.sess = tf.InteractiveSession()
-        self.init = tf.global_variables_initializer()
-        self.sess.run(self.init)
 
         self.rank = MPI.COMM_WORLD.Get_rank()
         self.state_id_buffer = StateIdBuffer(max_len=50000)
@@ -58,7 +53,7 @@ class RewardFunctionLSTM:
         self.metrics = pd.DataFrame()
 
     def get_or_output(self, input):
-        return self.sess.run(self.reward_function.out_or, feed_dict={self.reward_function.input_or:input})
+        return self.reward_function.or_model(input)
 
     def store(self, data):
         if self.rank == 0 and data is not None:
@@ -81,21 +76,12 @@ class RewardFunctionLSTM:
         return self.goal_sampler.feedback_encodings_memory[goal_ids]
 
     def save_params(self, path):
-        variables = self.reward_function._vars('')
-        names = [v.name for v in variables]
-        values = [v.eval() for v in variables]
-        to_save = dict(zip(names, values))
         with open(path, 'wb') as f:
-            pickle.dump(to_save, f)
+            torch.save(self.reward_function.state_dict(), f)
 
     def load_params(self, path):
-        variables = self.reward_function._vars('')
         with open(path, 'rb') as f:
-            params = pickle.load(f)
-        assign_ops = []
-        for v in variables:
-            assign_ops.append(v.assign(params[v.name]))
-        self.sess.run(assign_ops)
+            self.reward_function.load_state_dict(torch.load(f))
 
     def update(self, epoch):
         if self.rank == 0:
@@ -105,7 +91,6 @@ class RewardFunctionLSTM:
 
             if epoch % self.freq_update == 0:
 
-
                 batch = Batch(states_train, state_id_buffer_train, self.reward_function.batch_size,
                               self.goal_sampler.id2one_hot, self.positive_ratio)
 
@@ -114,21 +99,26 @@ class RewardFunctionLSTM:
                 best_cost = 1e6
                 best_f1 = -1
                 for e in range(self.n_epoch):
+
+                    losses_over_epoch = []
                     for b in range(self.n_batch):
-                        batch_s, batch_i, batch_r = batch.next_batch()
-                        batch_r = batch_r.reshape([len(batch_r), 1])
+                        batch_s, batch_descr, batch_r = batch.next_batch()
+                        batch_s = torch.tensor(batch_s, dtype=torch.float32)
+                        batch_descr = torch.tensor(batch_descr, dtype=torch.float32)
+                        batch_r = torch.tensor(batch_r, dtype=torch.float32)
+                        batch_pred = self.reward_function(batch_s, batch_descr).squeeze()
                         # todo batch are empty when there is no negatives (biased policy at first)
+
                         if batch_s.size != 0:
-                            self.sess.run(self.reward_function.get_optimizer(),
-                                          feed_dict={self.reward_function.S: batch_s,
-                                                     self.reward_function.I: np.array(batch_i),
-                                                     self.reward_function.Y: batch_r})
+                            loss = torch.mean(
+                                -torch.log(batch_pred) * batch_r + (1 - batch_r) * (-torch.log(1 - batch_pred)))
+                            losses_over_epoch.append(float(loss))
+                            self.optimizer.zero_grad()
+                            loss.backward()
+                            self.optimizer.step()
+                    mean_loss = np.mean(losses_over_epoch)
+
                     if batch_s.size != 0:
-                        cost_val, accuracy_val, precision_val = self.sess.run(
-                            [self.reward_function.get_cost(), self.reward_function.get_accuracy(),
-                             self.reward_function.get_precision()],
-                            feed_dict={self.reward_function.S: batch_s, self.reward_function.I: batch_i,
-                                       self.reward_function.Y: batch_r})
                         f1 = 0
                         if self.early_stopping == 'f1':
                             new_metrics = self.evaluate(states_test, state_id_buffer_test)
@@ -142,15 +132,15 @@ class RewardFunctionLSTM:
                                 if count_since_cost_improvement == 15:
                                     break
                         elif self.early_stopping == 'cost':
-                            if cost_val < best_cost - (best_cost * 0.1):
-                                best_cost = cost_val
+                            if mean_loss < best_cost - (best_cost * 0.1):
+                                best_cost = mean_loss
                                 count_since_cost_improvement = 0
                             else:
                                 count_since_cost_improvement += 1
                                 if count_since_cost_improvement == 15:
                                     break
-                        logger.info("Epoch: ", e + 1, '/', self.n_epoch, " Cost: ",
-                                    cost_val, " Accuracy: ", accuracy_val, " Precision: ", precision_val, "F1 test: ", f1)
+                        logger.info("Epoch: ", e + 1, '/', self.n_epoch, " Cost: ", mean_loss)
+
                 if self.early_stopping == 'f1':
                     self.restore_from_checkpoint(self.params['experiment_params']['logdir'] + 'tmp/best_checkpoint')
                 # save current checkpoint so that it can be loaded by or_module cpus
@@ -167,13 +157,12 @@ class RewardFunctionLSTM:
         self.n_added_states = 0
 
     def save_checkpoint(self, path):
-        saver = tf.train.Saver()
-        saver.save(self.sess, path)
+        with open(path, 'wb') as f:
+            torch.save(self.reward_function.state_dict(), f)
 
-    def restore_from_checkpoint(self, path_ckpt):
-        saver = tf.train.Saver()
-        saver.restore(self.sess, path_ckpt)
-        # update embeddings
+    def restore_from_checkpoint(self, path):
+        with open(path, 'rb') as f:
+            self.reward_function.load_state_dict(torch.load(f))
         self.goal_sampler.update_embeddings()
 
     def share_reward_function_to_all_cpus(self):
@@ -204,11 +193,7 @@ class RewardFunctionLSTM:
                 goal_ids_test.extend(goal_ids_test_id)
                 r_test.extend(r_test_id)
 
-            s_test = np.array(s_test)
             goal_ids_test = np.array(goal_ids_test)
-            r_test = np.array(r_test)
-            r_test = r_test.reshape([len(r_test), 1])
-
             new_metrics = get_metrics_by_instructions_lstm(r_test,
                                                            goal_ids_test,
                                                            predict_func=self.predict,
@@ -218,14 +203,15 @@ class RewardFunctionLSTM:
 
         return new_metrics
 
-
     def predict(self, state, goal_ids):
 
         goal_ids = goal_ids.flatten().astype(np.int)
-        instructions_embedding = np.atleast_2d(np.array(self.goal_sampler.feedback_memory['reward_encoding'])[goal_ids])
-        predictions = self.sess.run(self.reward_function.get_pred_from_precomputed_embedding(),
-                                    feed_dict={self.reward_function.precomputed_h_lstm: instructions_embedding,
-                                               self.reward_function.S: state})
+        descriptions_embedding = np.atleast_2d(np.array(self.goal_sampler.feedback_memory['reward_encoding'])[goal_ids])
+        self.reward_function.eval()
+        with torch.no_grad():
+            predictions = torch.round(self.reward_function.pred_from_h_lstm(torch.tensor(state, dtype=torch.float32),
+                                                                torch.tensor(descriptions_embedding,
+                                                                             dtype=torch.float32)))
         return np.atleast_1d(predictions.squeeze()).astype(np.int) - 1, None
 
     def eval_all_goals_from_episode(self, episode):

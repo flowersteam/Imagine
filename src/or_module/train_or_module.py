@@ -40,9 +40,9 @@ x_valid = np.concatenate([x_valid_pos, x_valid_neg], axis=0)
 assert (y_valid == 0).sum() == n_points // 2
 
 
-class Net(nn.Module):
+class OrNet(nn.Module):
     def __init__(self, n_obj):
-        super(Net, self).__init__()
+        super(OrNet, self).__init__()
         self.fc1 = nn.Linear(n_obj, 16)
         self.fc2 = nn.Linear(16, 16)
         self.fc3 = nn.Linear(16, 1)
@@ -148,62 +148,62 @@ def valid_epoch(val_loader, model, loss_fn, cuda, metrics):
 
 
 
+if __name__ =="__main__":
+    train_set = OrDataset(x_train, y_train, split='train')
+    valid_set = OrDataset(x_valid, y_valid, split='valid')
+    kwargs = {'num_workers': 1, 'pin_memory': True} if cuda else {}
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True, **kwargs)
+    valid_loader = torch.utils.data.DataLoader(valid_set, batch_size=batch_size, shuffle=True, **kwargs)
 
-train_set = OrDataset(x_train, y_train, split='train')
-valid_set = OrDataset(x_valid, y_valid, split='valid')
-kwargs = {'num_workers': 1, 'pin_memory': True} if cuda else {}
-train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True, **kwargs)
-valid_loader = torch.utils.data.DataLoader(valid_set, batch_size=batch_size, shuffle=True, **kwargs)
+    model = OrNet(n_objs)
 
-model = Net(n_objs)
+    loss_fn = F.binary_cross_entropy
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-3)
+    scheduler = lr_scheduler.StepLR(optimizer, 8, gamma=0.1, last_epoch=-1)
+    best_accuracy = 0
+    for epoch in range(n_epochs):
 
-loss_fn = F.binary_cross_entropy
-optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-3)
-scheduler = lr_scheduler.StepLR(optimizer, 8, gamma=0.1, last_epoch=-1)
-best_accuracy = 0
-for epoch in range(n_epochs):
+        # Train stage
+        train_loss, metrics = train_epoch(train_loader, model, loss_fn, optimizer, cuda, 200, [MyAccumulatedAccuracyMetric()])
 
-    # Train stage
-    train_loss, metrics = train_epoch(train_loader, model, loss_fn, optimizer, cuda, 200, [MyAccumulatedAccuracyMetric()])
+        scheduler.step()
+        message = 'Epoch: {}/{}. Train set: Average loss: {:.4f}'.format(epoch + 1, n_epochs, train_loss)
+        for metric in metrics:
+            message += '\t{}: {}'.format(metric.name(), metric.value())
 
-    scheduler.step()
-    message = 'Epoch: {}/{}. Train set: Average loss: {:.4f}'.format(epoch + 1, n_epochs, train_loss)
-    for metric in metrics:
-        message += '\t{}: {}'.format(metric.name(), metric.value())
+        train_accuracy = metrics[0].value()
 
-    train_accuracy = metrics[0].value()
+        val_loss, metrics = valid_epoch(valid_loader, model, loss_fn, cuda, [MyAccumulatedAccuracyMetric()])
+        val_loss /= len(valid_loader)
 
-    val_loss, metrics = valid_epoch(valid_loader, model, loss_fn, cuda, [MyAccumulatedAccuracyMetric()])
-    val_loss /= len(valid_loader)
+        message += '\nEpoch: {}/{}. Validation set: Average loss: {:.4f}'.format(epoch + 1, n_epochs,
+                                                                                 val_loss)
+        for metric in metrics:
+            message += '\t{}: {}'.format(metric.name(), metric.value())
 
-    message += '\nEpoch: {}/{}. Validation set: Average loss: {:.4f}'.format(epoch + 1, n_epochs,
-                                                                             val_loss)
-    for metric in metrics:
-        message += '\t{}: {}'.format(metric.name(), metric.value())
+        valid_accuracy = metrics[0].value()
+        if metrics[0].value() > best_accuracy:
+            best_accuracy = valid_accuracy
+            is_best = True
+        else:
+            is_best = False
 
-    valid_accuracy = metrics[0].value()
-    if metrics[0].value() > best_accuracy:
-        best_accuracy = valid_accuracy
-        is_best = True
-    else:
-        is_best = False
+        print(message)
 
-    print(message)
+    or_params = dict(fc1_weight=model.fc1.weight.data.numpy(),
+                     fc1_bias=model.fc1.bias.data.numpy(),
+                     fc2_weight=model.fc2.weight.data.numpy(),
+                     fc2_bias=model.fc2.bias.data.numpy(),
+                     fc3_weight=model.fc3.weight.data.numpy(),
+                     fc3_bias=model.fc3.bias.data.numpy(),
+                     description='fc1:[n_obj, 16]->tanh->fc2:[16, 16]->tanh->fc3:[16, 1]-> sigmoid',
+                     layers = [[n_objs, 16], [16, 16], [16, 1]],
+                     activations = ['tanh', 'tanh', 'sigmoid']
+                     )
 
-or_params = dict(fc1_weight=model.fc1.weight.data.numpy(),
-                 fc1_bias=model.fc1.bias.data.numpy(),
-                 fc2_weight=model.fc2.weight.data.numpy(),
-                 fc2_bias=model.fc2.bias.data.numpy(),
-                 fc3_weight=model.fc3.weight.data.numpy(),
-                 fc3_bias=model.fc3.bias.data.numpy(),
-                 description='fc1:[n_obj, 16]->tanh->fc2:[16, 16]->tanh->fc3:[16, 1]-> sigmoid',
-                 layers = [[n_objs, 16], [16, 16], [16, 1]],
-                 activations = ['tanh', 'tanh', 'sigmoid']
-                 )
-
-with open(os.path.dirname(os.path.realpath(__file__)) + '/or_params_{}objs.pk'.format(n_objs), 'wb') as f:
-    pickle.dump(or_params, f)
-stop = 1
+    with open(os.path.dirname(os.path.realpath(__file__)) + '/or_params_{}objs.pk'.format(n_objs), 'wb') as f:
+        pickle.dump(or_params, f)
+    stop = 1
 
 
 

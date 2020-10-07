@@ -127,9 +127,9 @@ def train(policy, training_worker, evaluation_worker, data_processor, goal_sampl
             timee = time.time()
             if epoch > 0 or params['conditions']['reward_function'] == 'oracle':
                 for _ in range(n_batches):
-                    _, _, times_training = policy.train(epoch)
+                    times_training = policy.update(epoch)
                     time_tracker.add(**times_training)
-                policy.update_target_net()
+                policy.soft_update()
             time_tracker.add(time_train=time.time() - timee)
 
         # # # # # #
