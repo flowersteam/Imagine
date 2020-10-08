@@ -224,15 +224,31 @@ def compute_classification_metrics(g, data_stats=False):
     if no_pred:
         precision = np.nan
     else:
-        precision = precision_score(g.true_label, g.pred_label)
+        try:
+            precision = precision_score(g.true_label, g.pred_label)
+        except:
+            print('------- ATTENTION PRECISION --------')
+            print(g.true_label)
+            print(g.pred_label)
     if no_true:
         recall = np.nan
     else:
-        recall = recall_score(g.true_label, g.pred_label)
+        try:
+            recall = recall_score(g.true_label, g.pred_label)
+        except:
+            print('------- ATTENTION RECALL --------')
+            print(g.true_label)
+            print(g.pred_label)
+
     if no_pred or no_true:
         f1 = np.nan
     else:
-        f1 = f1_score(g.true_label, g.pred_label)
+        try:
+            f1 = f1_score(g.true_label, g.pred_label)
+        except:
+            print('------- ATTENTION F1 --------')
+            print(g.true_label)
+            print(g.pred_label)
 
     if data_stats:
         count = len(g)
