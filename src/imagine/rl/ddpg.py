@@ -191,6 +191,10 @@ class DDPG:
 
     def load_params(self, path):
         model = torch.load(path)
+        self.o_norm.mean= model[0]
+        self.o_norm.std = model[1]
+        self.g_norm.mean = model[2]
+        self.g_norm.std = model[3]
         self.actor_network.load_state_dict(model[-1])
 
 
