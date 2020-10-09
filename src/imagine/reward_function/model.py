@@ -81,7 +81,7 @@ class RewardFunctionModel(torch.nn.Module):
         self.fc_reward = Feedforward(self.sub_state_size, [self.ff_size, 1])
         self.or_model = OrNet(n_obj=n_obj)  # modify ornet with deep set
         self.or_model.load_state_dict(torch.load(or_params_path[self.n_obj]))
-        self.sigmoid = nn.Sigmoid()
+        self.sigmoid = torch.sigmoid
 
     def pred_from_h_lstm(self, s, h_lstm):
         '''

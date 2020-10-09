@@ -47,8 +47,8 @@ class OrNet(nn.Module):
         self.fc3 = nn.Linear(16, 1)
 
     def forward(self, x):
-        x = F.tanh(self.fc1(x))
-        x = F.tanh(self.fc2(x))
+        x = torch.tanh(self.fc1(x))
+        x = torch.tanh(self.fc2(x))
         x = torch.sigmoid(self.fc3(x))
         x = 0.98 * x + 0.01
         return x
