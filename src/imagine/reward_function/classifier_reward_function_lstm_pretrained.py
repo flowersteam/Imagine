@@ -14,6 +14,22 @@ from src.imagine.reward_function.model import RewardFunctionModel
 
 class RewardFunctionLSTMPretrained:
     def __init__(self, goal_sampler, params):
+        '''
+        The reward function object used to store and use a pre-trained reward function.
+
+        Parameters
+        ----------
+        goal_sampler : A goal smapler object (use to access language information about goal descriptions)
+        params : contains a variety of params:
+            batch_size: Size of batch use to compute gradient before backpropagating.
+            positive_ratio: Ration between positive and negative reward labels used to construct batches during training.
+            n_epoch: maximum number of epochs done at each reward function update.
+            n_batch: number of batches per epoch.
+            freq_update: frequeny of update of the reward function (computed with respect to policy updates).
+            proportion_split_test: Number of samples saved to construct test set to self evaluate the reward function's
+            generalization capabilities.
+
+        '''
 
         # Learning Meta Parameters
         self.batch_size = params['reward_function']['batch_size']

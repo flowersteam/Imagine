@@ -12,7 +12,23 @@ from src.imagine.reward_function.model import RewardFunctionModel
 
 class RewardFunctionLSTM:
     def __init__(self, goal_sampler, params):
+        '''
+        The reward function object used to train the reward function model alongside the policy.
+        The reward function is trained from goals sampled by the goal sampler and data collected by the policy.
 
+        Parameters
+        ----------
+        goal_sampler : A goal smapler object (use to access language information about goal descriptions)
+        params : contains a variety of params:
+            batch_size: Size of batch use to compute gradient before backpropagating.
+            positive_ratio: Ration between positive and negative reward labels used to construct batches during training.
+            n_epoch: maximum number of epochs done at each reward function update.
+            n_batch: number of batches per epoch.
+            freq_update: frequeny of update of the reward function (computed with respect to policy updates).
+            proportion_split_test: Number of samples saved to construct test set to self evaluate the reward function's
+            generalization capabilities.
+
+        '''
         # Learning Meta Parameters
         self.batch_size = params['reward_function']['batch_size']
         self.positive_ratio = params['reward_function']['reward_positive_ratio']
@@ -146,9 +162,6 @@ class RewardFunctionLSTM:
                 # save current checkpoint so that it can be loaded by or_module cpus
                 self.save_checkpoint(self.params['experiment_params']['logdir'] + 'tmp/current_checkpoint')
 
-            # todo: evaluate only if we have enough 0.1*n_added_states
-            # if we do not evaluate, we should not reset n_added_states
-            # think of something smart here
             new_metrics = self.evaluate(states_test, state_id_buffer_test)
             self.recent_metrics_record.append(new_metrics)
             self.metrics = pd.concat(self.recent_metrics_record).groupby('instruction').mean().round(2)

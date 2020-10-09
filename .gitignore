@@ -112,6 +112,7 @@ venv.bak/
 .idea/
 
 # data
+data/*
 *.txt
 #*.pk
 *.pt
@@ -120,4 +121,6 @@ venv.bak/
 *.npy
 *.jbl
 
+src/data/expe/*
+src/data/lstm_checkpoints/*
 src/results/*

@@ -8,13 +8,34 @@ from src.imagine.rl.replay_buffer import ReplayBuffer
 from src.imagine.rl.actor_critic import Actor, Critic
 from src.imagine.rl.mpi_utils.normalizer import Normalizer
 
-"""
-DDPG with HER (MPI-version)
-​
-"""
+
 
 
 class DDPG:
+    """
+    Implementation of DDPG that is used in combination with Hindsight Experience Replay (HER).
+    Taken from https://github.com/TianhongDai/hindsight-experience-replay
+
+    sample_transitions (function) function that samples from the replay buffer
+    Args forwarded in params (dict)
+        dims (dict of ints): dimensions for the observation (obs), the goal (g_encoding), and the
+            actions (acts) and action max (action_max)
+        buffer_size (int): number of transitions that are stored in the replay buffer
+        hidden (int): number of units in the hidden layers
+        layers (int): number of hidden layers
+        polyak (float): coefficient for Polyak-averaging of the target network
+        batch_size (int): batch size for training
+        lr_critic (float): learning rate for the Q (critic) network
+        lr_actor (float): learning rate for the pi (actor) network
+        norm_eps (float): a small value used in the normalizer to avoid numerical instabilities
+        norm_clip (float): normalized inputs are clipped to be in [-norm_clip, norm_clip]
+        action_l2 (float): coefficient for L2 penalty on the actions
+        clip_obs (float): clip observations before normalization to be in [-clip_obs, clip_obs]
+        T (int): the time horizon for rollouts
+        clip_pos_returns (boolean): whether or not positive returns should be clipped
+        gamma (float): gamma used for Q learning updates
+    """
+
     def __init__(self, params, sample_transitions):
         params = params.copy()
         params['make_env'] = None
@@ -107,11 +128,6 @@ class DDPG:
             # We don't need this for playing the policy.
             state['sample_transitions'] = None
 
-        # self.__init__(**state)
-        # # set up stats (they are overwritten in __init__)
-        # for k, v in state.items():
-        #     if k[-6:] == '_stats':
-        #         self.__dict__[k] = v
 
     def _preproc_og(self, o, g):
         o = np.clip(o, -self.clip_obs, self.clip_obs)
