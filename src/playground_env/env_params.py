@@ -3,22 +3,50 @@ import os
 from src.playground_env.color_generation import *
 
 
-def get_env_params(max_nb_objects=3,  # number of objects in the scene
-                   admissible_actions=('Move', 'Grasp', 'Grow'),  # which types of actions are admissible
-                   admissible_attributes=('colors', 'categories', 'types'),#, 'relative_sizes', 'shades', 'relative_shades', 'sizes', 'relative_positions'),
-# which object attributes
-                   # can be used
-                   min_max_sizes=((0.2, 0.25), (0.25, 0.3)),  # ranges of sizes of objects (small and large ones)
-                   agent_size=0.05,  # size of the agent
-                   epsilon_initial_pos=0.3,  # epsilon to sample initial positions
-                   screen_size=800,  # size of the visualization screen
-                   next_to_epsilon=0.3,  # define the area to qualify an object as 'next to' another.
-                   attribute_combinations=True,
+def get_env_params(max_nb_objects=3,
+                   admissible_actions=('Move', 'Grasp', 'Grow'),
+                   admissible_attributes=('colors', 'categories', 'types'),
+                   min_max_sizes=((0.2, 0.25), (0.25, 0.3)),
+                   agent_size=0.05,
+                   epsilon_initial_pos=0.3,
+                   screen_size=800,
+                   next_to_epsilon=0.3,
+                   attribute_combinations=False,
                    obj_size_update=0.04,
                    render_mode=True
                    ):
+    """
+    Builds the set of environment parameters, and the set of function to extract information from the state.
 
-    # admissible attributes can also contain 'relative_shades', 'relative_sizes', 'positions', 'colors', 'shades', 'sizes', 'types', 'categories', 'relative_positions'
+    Parameters
+    ----------
+    max_nb_objects: int
+         Maximum number of objects in the scene (effective number if it's not random).
+    admissible_actions: tuple of str
+        which types of actions are admissible
+    admissible_attributes: tuple of str
+        All admissible attributes, should be included in ('colors', 'categories', 'types', 'relative_sizes', 'shades', 'relative_shades', 'sizes', 'relative_positions')
+    min_max_sizes: tuple of tuples
+        Min and max sizes for the small and big objects respectively.
+    agent_size: float
+        Size of the agent.
+    epsilon_initial_pos: float
+        Range of initial position around origin.
+    screen_size: int
+        Screen size in pixels.
+    next_to_epsilon: float
+        Define which area corresponds to 'next to'.
+    attribute_combinations: Bool
+        Whether attributes should include combinations of two attributes.
+    obj_size_update: float
+        By how much should be updated the size of objects when the agent grows them.
+    render_mode: Bool
+        Whether to render the environment.
+
+    Returns
+    -------
+    params: dict
+    """
 
     # list objects and categories
     furnitures = ('door', 'chair', 'desk', 'lamp', 'table', 'cupboard', 'sink', 'window', 'sofa', 'carpet')
@@ -35,7 +63,8 @@ def get_env_params(max_nb_objects=3,  # number of objects in the scene
     types = ()
     for k_c in categories.keys():
         types += categories[k_c]
-    types = tuple(set(types))
+    types = tuple(set(types)) # filters doubles, when some categories include others.
+    nb_types = len(types)
 
     # List attributes
     colors = ('red', 'blue', 'green')
@@ -54,29 +83,32 @@ def get_env_params(max_nb_objects=3,  # number of objects in the scene
                       relative_shades=relative_shades,
                       relative_sizes=relative_sizes,
                       relative_positions=relative_positions)
-    adjective_attributes = ()
+
+    # Get the list of admissible attributes
     name_attributes = ()
-    for k in attributes.keys():
-        if k in ('type', 'category'):
-            name_attributes += attributes[k]
-        else:
-            adjective_attributes += attributes[k]
+    adjective_attributes = ()
+    for att_type in attributes.keys():
+        if att_type in admissible_attributes:
+            if att_type in ('types', 'categories'):
+                name_attributes += attributes[att_type]
+            else:
+                adjective_attributes += attributes[att_type]
+
 
     for att in admissible_attributes:
         assert att in attributes.keys()
 
+    # This defines the list of occurrences that should belong to the test set. All descriptions that contain them belong to the testing set.
     words_test_set_def = ('red tree', 'green dog', 'blue door') + \
                          ('flower',) + \
                          tuple('Grasp {} animal'.format(c) for c in colors + ('any',)) + \
                          tuple('Grow {} {}'.format(c, p) for c in colors + ('any',) for p in plants + ('plant', 'living_thing')) + \
                          tuple('Grasp {} fly'.format(c) for c in colors + ('any',))
 
-    nb_types = len(types)
 
     # get indices of attributes in object feature vector
     dim_body_features = 3
     agent_position_inds = np.arange(2)
-
     dim_obj_features = nb_types + 7
     type_inds = np.arange(0, nb_types)
     position_inds = np.arange(nb_types, nb_types + 2)
@@ -143,8 +175,8 @@ def get_env_params(max_nb_objects=3,  # number of objects in the scene
     def get_obj_color(all_obj_features, i_obj):
         obj_features = all_obj_features[i_obj]
         rgb = obj_features[color_inds]
-        for c in ['blue', 'green', 'red', 'dark']:
-            for s in ['light', 'dark']:
+        for c in colors:
+            for s in shades:
                 color_class = Color(c, s)
                 if color_class.contains(rgb):
                     return [c]
@@ -153,8 +185,8 @@ def get_env_params(max_nb_objects=3,  # number of objects in the scene
     def get_obj_shade(all_obj_features, i_obj):
         obj_features = all_obj_features[i_obj]
         rgb = obj_features[color_inds]
-        for c in ['blue', 'green', 'red', 'dark']:
-            for s in ['light', 'dark']:
+        for c in colors:
+            for s in shades:
                 color_class = Color(c, s)
                 if color_class.contains(rgb):
                     return [s]
@@ -249,8 +281,6 @@ def get_env_params(max_nb_objects=3,  # number of objects in the scene
         if i_obj in get_lowest_obj_id(all_obj_features):
             out.append('lowest')
         return out
-    
-        
 
     get_attributes_functions = dict(relative_shades=get_obj_relative_shades,
                                     relative_sizes=get_obj_relative_sizes,
@@ -263,7 +293,7 @@ def get_env_params(max_nb_objects=3,  # number of objects in the scene
                                     categories=get_obj_cat)
     assert sorted(list(get_attributes_functions.keys())) == sorted(list(attributes))
 
-
+    # List all attributes of all objects from state
     def get_attributes_from_state(state):
         assert state.ndim == 1
         nb_objs = count_objects(state)
@@ -281,7 +311,7 @@ def get_env_params(max_nb_objects=3,  # number of objects in the scene
 
     get_attributes_functions['all_attributes'] = get_attributes_from_state
 
-    # extract position of the agent
+    # Extract absolute position of the agent
     def get_agent_position_attributes(state):
         agent_pos = state[agent_position_inds]
         out = []
@@ -309,7 +339,7 @@ def get_env_params(max_nb_objects=3,  # number of objects in the scene
 
         return out.copy()
 
-    # extract interactions with objects (touched, grasped, grown)
+    # Extract interactions with objects (touched, grasped, grown)
     def get_touched_obj_ids(state):
         nb_objs = count_objects(state)
         agent_position = state[agent_position_inds]
@@ -343,6 +373,7 @@ def get_env_params(max_nb_objects=3,  # number of objects in the scene
                 grown_ids.append(i_obj)
         return np.array(grown_ids)
 
+    # Whether a supply is in contact with some non living thing object (to track funny behaviors where agents try to grow furtniture etc).
     def get_supply_contact_ids(state):
         nb_objs = count_objects(state)
         all_obj_features = [get_obj_features(state, i_obj) for i_obj in range(nb_objs)]
@@ -367,20 +398,20 @@ def get_env_params(max_nb_objects=3,  # number of objects in the scene
         else:
             return np.array([])
 
-
     get_interactions = dict(get_touched=get_touched_obj_ids,
                             get_grasped=get_grasped_obj_ids,
                             get_grown=get_grown_obj_ids,
                             get_supply_contact=get_supply_contact_ids)
 
 
-
+    # extract category of a type attribute
     def find_category_of_attribute(attribute):
         for k in attributes.keys():
             if attribute in attributes[k]:
                 return k
         return None
 
+    # check whether an attribute is a relative attribute.
     def check_if_relative(attribute):
         attributes = [a for a in attribute.split(' ') if a != 'and']
         for a in attributes:
@@ -402,7 +433,7 @@ def get_env_params(max_nb_objects=3,  # number of objects in the scene
         else:
             return False
 
-
+    # combine two attributes to form a new one. Only works when combining non-relative attributes and adjective attributes.
     def combine_two(attribute_a, attribute_b):
         att_combinations = []
         for a in attribute_a:

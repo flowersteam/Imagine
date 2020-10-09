@@ -4,6 +4,20 @@ from src.playground_env.descriptions import generate_all_descriptions
 train_descriptions, test_descriptions, extra_descriptions = generate_all_descriptions(get_env_params())
 
 def get_move_descriptions(get_agent_position_attributes, current_state):
+    """
+    Get all move descriptions from the current state (if any).
+    Parameters
+    ----------
+    get_agent_position_attributes: function
+        Function that extracts the absolute position of the agent from the state.
+    current_state: nd.array
+        Current state of the environment.
+
+    Returns
+    -------
+    descr: list of str
+        List of Move descriptions satisfied by the current state.
+    """
     move_descriptions = []
     position_attributes = get_agent_position_attributes(current_state)
     for pos_att in position_attributes:
@@ -11,6 +25,31 @@ def get_move_descriptions(get_agent_position_attributes, current_state):
     return move_descriptions.copy()
 
 def get_grasp_descriptions(get_grasped_ids, current_state, sort_attributes, obj_attributes, params, check_if_relative, combine_two):
+    """
+    Get all Grasp descriptions from the current state (if any).
+
+    Parameters
+    ----------
+    get_grasped_ids: function
+        Function that extracts the id of objects that are being grasped.
+    current_state: nd.array
+        Current state of the environment.
+    sort_attributes: function
+        Function that separates adjective and name attributes.
+    obj_attributes: list of list
+        List of the list of object attributes for each object.
+    params: dict
+        Environment params.
+    check_if_relative: function
+        Checks whether an attribute is a relative attribute.
+    combine_two: function
+        Function that combines two attributes to form new attributes.
+
+    Returns
+    -------
+    descr: list of str
+        List of Grasp descriptions satisfied by the current state.
+    """
     obj_grasped = get_grasped_ids(current_state)
     verb = 'Grasp'
     grasp_descriptions = []
@@ -33,6 +72,33 @@ def get_grasp_descriptions(get_grasped_ids, current_state, sort_attributes, obj_
     return grasp_descriptions.copy()
 
 def get_grow_descriptions(get_grown_ids, initial_state, current_state, params, obj_attributes, sort_attributes, combine_two, check_if_relative):
+    """
+    Get all Grow descriptions from the current state (if any).
+
+    Parameters
+    ----------
+    get_grown_ids: function
+        Function that extracts the id of objects that are being grown.
+    initial_state: nd.array
+        Initial state of the environment.
+    current_state: nd.array
+        Current state of the environment.
+    sort_attributes: function
+        Function that separates adjective and name attributes.
+    obj_attributes: list of list
+        List of the list of object attributes for each object.
+    params: dict
+        Environment params.
+    check_if_relative: function
+        Checks whether an attribute is a relative attribute.
+    combine_two: function
+        Function that combines two attributes to form new attributes.
+
+    Returns
+    -------
+    descr: list of str
+        List of Grasp descriptions satisfied by the current state.
+    """
     obj_grown = get_grown_ids(initial_state, current_state)
     verb = 'Grow'
     grow_descriptions = []
@@ -57,6 +123,9 @@ def get_grow_descriptions(get_grown_ids, initial_state, current_state, params, o
     return grow_descriptions.copy()
 
 def get_extra_grow_descriptions(get_supply_contact_ids, initial_state, current_state, params, obj_attributes, sort_attributes, combine_two, check_if_relative):
+    """
+    Equivalent of the grow description for attempting to grow furniture (track funny behavior of the agent).
+    """
     obj_grown = get_supply_contact_ids(current_state)
     verb = 'Attempted grow'
     grow_descriptions = []
@@ -81,7 +150,20 @@ def get_extra_grow_descriptions(get_supply_contact_ids, initial_state, current_s
     return grow_descriptions.copy()
 
 def sample_descriptions_from_state(state, params):
+    """
+    This function samples all description of the current state
+    Parameters
+    ----------
+    state: nd.array
+        Current environment state.
+    params: dict
+        Dict of env parameters.
 
+    Returns
+    -------
+     descr: list of str
+        List of descriptions satisfied by the current state.
+    """
     get_grasped_ids = params['extract_functions']['get_interactions']['get_grasped']
     get_grown_ids = params['extract_functions']['get_interactions']['get_grown']
     get_supply_contact = params['extract_functions']['get_interactions']['get_supply_contact']
@@ -150,10 +232,24 @@ def sample_descriptions_from_state(state, params):
             print(descr)
             raise ValueError
 
-    return train_descr.copy(), test_descr.copy(), extra_descriptions.copy()
+    return train_descr.copy(), test_descr.copy(), extra_descr.copy()
 
 def get_reward_from_state(state, goal, params):
+    """
+    Reward function. Whether the state satisfies the goal.
+    Parameters
+    ----------
+    state: nd.array
+        Current environment state.
+    goal: str
+        Description of the goal.
+    params: dict
+        Environment parameters.
 
+    Returns
+    -------
+    bool
+    """
     get_grasped_ids = params['extract_functions']['get_interactions']['get_grasped']
     get_grown_ids = params['extract_functions']['get_interactions']['get_grown']
     get_attributes_functions = params['extract_functions']['get_attributes_functions']

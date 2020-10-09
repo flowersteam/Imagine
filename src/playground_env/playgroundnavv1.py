@@ -4,7 +4,6 @@ from gym import spaces
 import numpy as np
 import pygame
 from src.playground_env.objects import generate_objects
-from src.playground_env.reward_function import *
 from src.playground_env.env_params import get_env_params
 
 class PlayGroundNavigationV1(gym.Env):
@@ -39,7 +38,7 @@ class PlayGroundNavigationV1(gym.Env):
                  epsilon_initial_pos=0.3,  # epsilon to sample initial positions
                  screen_size=800,  # size of the visualization screen
                  next_to_epsilon=0.3,  # define the area to qualify an object as 'next to' another.
-                 attribute_combinations=True,
+                 attribute_combinations=False,
                  obj_size_update=0.04,
                  render_mode=False
                  ):
@@ -121,53 +120,6 @@ class PlayGroundNavigationV1(gym.Env):
         self.initial_observation = None
         self.done = None
 
-
-
-    def change_n_objs(self, n_objs):
-        self.nb_obj = n_objs
-        self.inds_objs = [np.arange(n_inds_before_obj_inds + self.dim_obj * i_obj,
-                                    n_inds_before_obj_inds + self.dim_obj * (i_obj + 1)) for i_obj in
-                          range(self.nb_obj)]
-        self.half_dim_obs = self.nb_obj * self.dim_obj + n_inds_before_obj_inds
-        self.dim_obs = self.half_dim_obs * 2
-
-    def set_state(self, state):
-
-        assert state.size == self.half_dim_obs, 'N_OBJECTS_IN_SCENE is not right'
-        current_state = state[:state.shape[0] // 2]
-        self.agent_pos = current_state[:2]
-        self.gripper_state = current_state[2]
-
-        self.initial_observation = current_state - state[state.shape[0] // 2:]
-        obj_features = []
-        for i_obj in range(self.nb_obj):
-            obj_features.append(current_state[self.inds_objs[i_obj]])
-        self.set_objects(obj_features)
-        self.object_grasped = np.any(np.array(obj_features)[:, -1] == 1)
-
-    def set_objects(self, features):
-        objects = []
-        objects_ids = []
-        objects_types = []
-        for obj_feat in features:
-            type = get_object_type_and_categories(obj_feat)[0]
-            color, shade = get_object_color_and_shade(obj_feat, True, True)
-            size = get_size(obj_feat)[0]
-            obj_id = get_obj_identifier(type, color, shade, size)
-            if obj_id not in objects_ids:
-                objects.append(build_object(type, color, shade, size, len(objects), objects, self.render_mode))
-                objects_ids.append(obj_id)
-                objects_types.append(type)
-                objects[-1].update_color(color, shade, obj_feat[color_inds])
-                objects[-1].update_size(obj_feat[size_inds])
-                objects[-1].update_position(obj_feat[position_inds])
-
-        self.objects = objects
-        self.objects_ids = objects_ids
-        self.objects_types = objects_types
-        for obj in self.objects:
-            obj.give_ref_to_obj_list(self.objects)
-            obj.update_all_attributes()
 
     def regularize_type_and_attribute(self, object):
         if object['categories'] is None and object['types'] is not None:
@@ -284,7 +236,7 @@ class PlayGroundNavigationV1(gym.Env):
             object_descr.append(object)
         object_descr = self.complete_and_check_objs(object_descr)
         objects_ids = [self.get_obj_identifier(o) for o in object_descr]
-        objects = generate_objects(object_descr, objects_ids, self.params)
+        objects = generate_objects(object_descr, self.params)
         return objects
 
     def get_obj_identifier(self, object):
