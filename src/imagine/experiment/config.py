@@ -124,7 +124,7 @@ def configure_everything(rank, seed, num_cpu, env, trial_id, n_epochs, reward_fu
     goal_generator = SentenceGeneratorHeuristic(train_descriptions, test_descriptions, sentences=None, method='CGH')
     goal_generator.update_model(train_descriptions + test_descriptions)
     imagined_descriptions = goal_generator.generate_sentences()
-    all_descriptions = train_descriptions + test_descriptions + imagined_descriptions
+    all_descriptions = train_descriptions + test_descriptions + tuple(imagined_descriptions)
 
     # train_descriptions, test_descriptions, all_descriptions = get_descriptions(ENV_ID)
     # assert sorted(train_descriptions) == sorted(train_descriptions_env)

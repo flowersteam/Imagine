@@ -9,8 +9,6 @@ from src.imagine.rl.actor_critic import Actor, Critic
 from src.imagine.rl.mpi_utils.normalizer import Normalizer
 
 
-
-
 class DDPG:
     """
     Implementation of DDPG that is used in combination with Hindsight Experience Replay (HER).
