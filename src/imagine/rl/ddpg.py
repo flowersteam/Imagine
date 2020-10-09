@@ -1,15 +1,15 @@
 import torch
 from collections import deque
 import time
-import numpy as np
 import pickle
+import numpy as np
 from src.imagine.rl.mpi_utils.mpi_utils import sync_networks, sync_grads
 from src.imagine.rl.replay_buffer import ReplayBuffer
 from src.imagine.rl.actor_critic import Actor, Critic
 from src.imagine.rl.mpi_utils.normalizer import Normalizer
 
 """
-ddpg with HER (MPI-version)
+DDPG with HER (MPI-version)
 ​
 """
 
@@ -65,11 +65,7 @@ class DDPG:
         # create the network
         self.actor_network = Actor(params['dims'], layers, hidden)
         self.critic_network = Critic(params['dims'], layers, hidden)
-        # #use custom init from tensorflow
-        # with open('../../data/tf_init_param/params_tf.pk', 'rb') as fp:
-        #     params_dict = pickle.load(fp)
-        # self.actor_network.load_from_tf_params(params_dict)
-        # self.critic_network.load_from_tf_params(params_dict)
+
         # sync the networks across the cpus
         sync_networks(self.actor_network)
         sync_networks(self.critic_network)
@@ -111,11 +107,11 @@ class DDPG:
             # We don't need this for playing the policy.
             state['sample_transitions'] = None
 
-        self.__init__(**state)
-        # set up stats (they are overwritten in __init__)
-        for k, v in state.items():
-            if k[-6:] == '_stats':
-                self.__dict__[k] = v
+        # self.__init__(**state)
+        # # set up stats (they are overwritten in __init__)
+        # for k, v in state.items():
+        #     if k[-6:] == '_stats':
+        #         self.__dict__[k] = v
 
     def _preproc_og(self, o, g):
         o = np.clip(o, -self.clip_obs, self.clip_obs)
@@ -158,7 +154,6 @@ class DDPG:
                     compute_Q=False):
         with torch.no_grad():
             obs, g = self._preproc_inputs_no_concat(obs, g)
-            # TODO Fix preprost
             action = self.actor_network(obs, g)
             if compute_Q:
                 q_value = self.critic_network(obs, g, action)
@@ -189,11 +184,15 @@ class DDPG:
         times_training = self._update_network(epoch)
         return times_training
 
-    def save_model(self, epoch):
-        if epoch % self.params['save_every'] == 0:
-            torch.save(
-                [self.o_norm.mean, self.o_norm.std, self.g_norm.mean, self.g_norm.std, self.actor_network.state_dict()], \
-                self.model_path + '/model_{}.pt'.format(epoch))
+    def save_model(self, path):
+        torch.save(
+            [self.o_norm.mean, self.o_norm.std, self.g_norm.mean, self.g_norm.std, self.actor_network.state_dict()], \
+            path)
+
+    def load_params(self, path):
+        model = torch.load(path)
+        self.actor_network.load_state_dict(model[-1])
+
 
     def store_episode(self, episodes, goals_reached_ids):
         self.buffer.store_episode(episodes, goals_reached_ids)

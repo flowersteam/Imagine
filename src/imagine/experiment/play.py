@@ -15,7 +15,7 @@ from src.imagine.goal_generator.descriptions import get_descriptions
 from src.playground_env.env_params import ENV_ID
 
 PATH = '../../../pretrained_weights/'
-EPOCH = 160
+EPOCH = 0
 POLICY_FILE = PATH + 'policy_checkpoints/policy_{}.pkl'.format(EPOCH)
 PARAMS_FILE = PATH + 'params.json'
 

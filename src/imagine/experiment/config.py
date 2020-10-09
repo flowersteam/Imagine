@@ -22,7 +22,7 @@ from src.playground_env.env_params import N_OBJECTS_IN_SCENE, ENV_ID
 from src.imagine.language_model import LanguageModelLSTM
 
 HOME = os.environ['HOME']
-if 'flowers' in HOME:
+if 'flowers' in HOME or 'tkarch' in HOME:
     USE_LOCAL_CONFIG = True
 else:
     USE_LOCAL_CONFIG = False
@@ -93,6 +93,7 @@ if USE_LOCAL_CONFIG:
     # debug configuration, runs quickly but does not learn
     DEFAULT_CONFIG['reward_function']['max_n_epoch'] = 5
     DEFAULT_CONFIG['experiment_params']['n_cycles'] = 10
+    DEFAULT_CONFIG['experiment_params']['policy_save_interval'] = 1
 
 
 def configure_everything(rank, seed, num_cpu, env, trial_id, n_epochs, reward_function, policy_encoding,
