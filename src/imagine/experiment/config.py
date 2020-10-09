@@ -22,7 +22,7 @@ from src.playground_env.env_params import N_OBJECTS_IN_SCENE, ENV_ID
 from src.imagine.language_model import LanguageModelLSTM
 
 HOME = os.environ['HOME']
-if 'flowers' in HOME or 'tkarch' in HOME:
+if 'flowers' in HOME:
     USE_LOCAL_CONFIG = True
 else:
     USE_LOCAL_CONFIG = False
