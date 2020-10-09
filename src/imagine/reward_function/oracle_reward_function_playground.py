@@ -3,6 +3,9 @@ from src.playground_env.reward_function import get_reward_from_state
 
 
 class OracleRewardFunction:
+    """
+    Oracle Reward Function. Used to get ground truth rewards to evaluate success rate
+    """
     def __init__(self, goal_sampler, params, convert_from_discovery_ids=False):
         self.descriptions = params['train_descriptions']
         self.obs_dim = params['dims']['obs'] // 2

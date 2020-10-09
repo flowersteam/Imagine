@@ -121,5 +121,6 @@ data/*
 *.npy
 *.jbl
 
-src/data/*
+src/data/expe/*
+src/data/lstm_checkpoints/*
 src/results/*

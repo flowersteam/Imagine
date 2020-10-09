@@ -64,8 +64,6 @@ DEFAULT_CONFIG = dict(experiment_params=dict(trial_id=0,
                                            layers=1,  # number of hidden layers in the critic/actor networks
                                            hidden=256,  # number of neurons in each hidden layer
                                            network_class='src.imagine.rl.actor_critic:ActorCritic',
-                                           Q_lr=0.001,  # critic learning rate
-                                           pi_lr=0.001,  # actor learning rate
                                            buffer_size=int(1e6),  # for experience replay
                                            batch_size=256,  # for rl updates
                                            polyak=0.95,  # polyak averaging coefficient

@@ -4,28 +4,9 @@ from src.or_module.train_or_module import OrNet
 from torch.autograd import Variable
 
 
-# # TODO: MIGHT BE BETTER TO USE DIRECTLY LSTM
-# class LSTMModel(torch.nn.Module):
-#     def __init__(self, input_size, hidden_size):
-#         super().__init__()
-#         self.input_size = input_size
-#         self.hidden_size = hidden_size
-#         self.lstm = torch.nn.LSTMCell(input_size=input_size, hidden_size=hidden_size, bias=True)
-#
-#     def forward(self, x):
-#         max_len, batch_size, features = x.size()
-#         h_lstm = Variable(torch.zeros(batch_size, self.hidden_size))
-#         c_lstm = Variable(torch.zeros(batch_size, self.hidden_size))
-#         output = []
-#         for i in range(max_len):
-#             h_lstm, c_lstm = self.lstm(x[i], (h_lstm, c_lstm))
-#             output.append(h_lstm)
-#         h1 = torch.stack(output)
-#         h2 = h1[-1, :, :]
-#         return h2
-
-
 class Feedforward(torch.nn.Module):
+    " A simple multilayer fully connected network"
+
     def __init__(self, input_size, layers_sizes):
         super(Feedforward, self).__init__()
         self.input_size = input_size
@@ -51,8 +32,25 @@ class Feedforward(torch.nn.Module):
 
 
 class RewardFunctionModel(torch.nn.Module):
+    '''
+    The Reward Function DEEPSET model.
+
+    Parameters
+    ----------
+    or_params_path : path to OR network pretrained weights
+    body_size : Size of body (3 in Playground)
+    obj_size : Size of object features vector (
+    n_obj : Number of objects in the scene (defaut is 3 in Playground)
+    state_size : State size (n_obj * obj_size + body_size) * 2
+    voc_size : Size of the vocabulary used to construct language descriptions provided by the social Partner in the Environment
+    sequence_length : Maximum length of sequences (number of tokens in descriptions provided by the social Partner)
+    batch_size : Number of examples used to compute gradient for training.
+    num_hidden_lstm : Size of the latent space of the LSTM.
+    '''
+
     def __init__(self, or_params_path, body_size, obj_size, n_obj, state_size, voc_size, sequence_length, batch_size,
                  num_hidden_lstm):
+
         super().__init__()
         self.body_size = body_size
         self.obj_size = obj_size
@@ -86,6 +84,18 @@ class RewardFunctionModel(torch.nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def pred_from_h_lstm(self, s, h_lstm):
+        '''
+        Computes the reward for a given state s and a given language code h_lstm
+        Parameters
+        ----------
+        s : Input state
+        h_lstm : Input language encoding (Output from LSTM)
+
+        Returns
+        -------
+        logits: the reward logit (the answer to the question: Does my state s corresponds to a configuration that
+        fulfills the descriptions encoded in h_lstm)
+        '''
         h_cast = self.sigmoid(self.fc_cast(h_lstm))
         # extract inputs for each object (and their delta)
         object_features = []
@@ -119,13 +129,34 @@ class RewardFunctionModel(torch.nn.Module):
         return logits
 
     def forward(self, s, description):
+        '''
+        Forward pass of the model
 
+        Parameters
+        ----------
+        s : Input state
+        description : Input Description (one hot encoded)
+
+        Returns
+        -------
+        The reward logit.
+        '''
         h_lstm_seq, _ = self.lstm(description)
         h_lstm = h_lstm_seq[:, -1, :]
 
         return self.pred_from_h_lstm(s, h_lstm)
 
     def get_description_embedding(self, descr):
+        '''
+
+        Parameters
+        ----------
+        descr : a description (one hot encoded)
+
+        Returns
+        -------
+        The description's code.
+        '''
         self.eval()
         with torch.no_grad():
             h_lstm_seq, _ = self.lstm(descr)

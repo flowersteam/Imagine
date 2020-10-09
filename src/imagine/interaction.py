@@ -4,7 +4,24 @@ import numpy as np
 from mpi4py import MPI
 
 class RolloutWorker:
+    """Rollout worker generates experience by interacting with one or many environments.
 
+    Args:
+        make_env (function): a factory function that creates a new instance of the environment
+            when called
+        policy (object): the policy that is used to act
+        T (int): number of timesteps in an episode
+        eval_bool (bool): whether it is an evaluator rollout worker or not
+        rollout_batch_size (int): the number of parallel rollouts that should be used
+        exploit (boolean): whether or not to exploit, i.e. to act optimally according to the
+            current policy without any exploration
+        use_target_net (boolean): whether or not to use the target net for rollouts
+        compute_Q (boolean): whether or not to compute the Q values alongside the actions
+        noise_eps (float): scale of the additive Gaussian noise
+        random_eps (float): probability of selecting a completely random action
+        history_len (int): length of history for statistics smoothing
+        render (boolean): whether or not to render the rollouts
+    """
     def __init__(self,
                  make_env,
                  policy,
@@ -22,24 +39,6 @@ class RolloutWorker:
                  save_obs=False,
                  params={},
                  **kwargs):
-        """Rollout worker generates experience by interacting with one or many environments.
-
-        Args:
-            make_env (function): a factory function that creates a new instance of the environment
-                when called
-            policy (object): the policy that is used to act
-            T (int): number of timesteps in an episode
-            eval_bool (bool): whether it is an evaluator rollout worker or not
-            rollout_batch_size (int): the number of parallel rollouts that should be used
-            exploit (boolean): whether or not to exploit, i.e. to act optimally according to the
-                current policy without any exploration
-            use_target_net (boolean): whether or not to use the target net for rollouts
-            compute_Q (boolean): whether or not to compute the Q values alongside the actions
-            noise_eps (float): scale of the additive Gaussian noise
-            random_eps (float): probability of selecting a completely random action
-            history_len (int): length of history for statistics smoothing
-            render (boolean): whether or not to render the rollouts
-        """
 
         self.T = T
         self.policy = policy

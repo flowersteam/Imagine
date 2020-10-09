@@ -35,6 +35,9 @@ class Feedforward(torch.nn.Module):
 
 
 class Actor(nn.Module):
+    """
+    Deepset implementation of Actor network
+    """
     def __init__(self, dims, layers, hidden):
         super(Actor, self).__init__()
         self.layers = layers
@@ -105,6 +108,9 @@ class Actor(nn.Module):
 
 
 class Critic(nn.Module):
+    """
+    Deepset implementation of Critic network
+    """
     def __init__(self, dims, layers, hidden):
         super(Critic, self).__init__()
         self.layers = layers
