@@ -112,7 +112,6 @@ venv.bak/
 .idea/
 
 # data
-data/*
 *.txt
 #*.pk
 *.pt
@@ -121,5 +120,4 @@ data/*
 *.npy
 *.jbl
 
-src/data/*
 src/results/*
