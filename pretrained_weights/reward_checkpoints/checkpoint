@@ -1,2 +1,0 @@
-model_checkpoint_path: "reward_func_latest_checkpoint"
-all_model_checkpoint_paths: "reward_func_latest_checkpoint"

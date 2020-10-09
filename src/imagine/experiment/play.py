@@ -12,7 +12,7 @@ from src.imagine.goal_sampler import GoalSampler
 from src.playground_env.reward_function import get_reward_from_state
 from src.playground_env.descriptions import generate_all_descriptions
 
-PATH = '/home/flowers/Desktop/Scratch/Imagine/src/data/expe/PlaygroundNavigation-v1/2033/' #'../../../pretrained_weights/'
+PATH = '../../../pretrained_weights/'
 EPOCH = 0
 POLICY_FILE = PATH + 'policy_checkpoints/policy_{}.pkl'.format(EPOCH)
 PARAMS_FILE = PATH + 'params.json'

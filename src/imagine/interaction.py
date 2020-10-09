@@ -134,8 +134,7 @@ class RolloutWorker:
     def save_policy(self, path):
         """Pickles the current policy for later inspection.
         """
-        with open(path, 'wb') as f:
-            pickle.dump(self.policy, f)
+        self.policy.save_model(path)
 
     def seed(self, seed):
         """Seeds each environment with a distinct seed derived from the passed in global seed.

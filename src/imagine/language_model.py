@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 class LanguageModelLSTM:
     def __init__(self, params):
@@ -20,9 +21,11 @@ class LanguageModelLSTM:
         # - a list of length rollout_batch_size, each element being a list of strings
 
         if input_str in self.classifier.goal_sampler.feedback2one_hot.keys():
-            instructions_one_hot = self.classifier.goal_sampler.feedback2one_hot[input_str]
+            descriptions_one_hot = self.classifier.goal_sampler.feedback2one_hot[input_str]
         else:
-            instructions_one_hot = self.classifier.goal_sampler.one_hot_encoder.encode(input_str.lower().split(" "))
-        embeddings = self.classifier.sess.run(self.reward_function.get_instruction_embedding(),
-                      feed_dict={self.reward_function.I: np.expand_dims(np.asarray(instructions_one_hot), 0)})
-        return embeddings.squeeze()
+            descriptions_one_hot = self.classifier.goal_sampler.one_hot_encoder.encode(input_str.lower().split(" "))
+
+        descriptions_one_hot=np.asarray(descriptions_one_hot).reshape([1]+list(np.shape(descriptions_one_hot)))
+        embeddings = self.classifier.reward_function.get_description_embedding(torch.tensor(descriptions_one_hot, dtype=torch.float32))
+
+        return embeddings.squeeze().detach().numpy()

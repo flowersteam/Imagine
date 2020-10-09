@@ -1,224 +1,173 @@
-import tensorflow as tf
-from src.utils.util import store_args, nn
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
+from torch.distributions import Normal
 
-class ActorCriticDDPG:
-    @store_args
-    def __init__(self, inputs_tf, dimo, dimg, dimu, inds_objs, hidden, layers,policy_architecture='modular_attention', **kwargs):
-        """The actor-critic network and related training code.
+"""
+the input x in both networks should be [o, g], where o is the observation and g is the goal.
 
-        Args:
-            inputs_tf (dict of tensors): all necessary inputs for the network: the
-                observation (o), the goal (g), and the action (u)
-            dimo (int): the dimension of the observations
-            dimg (int): the dimension of the goals
-            dimu (int): the dimension of the actions
-            max_u (float): the maximum magnitude of actions; action outputs will be scaled
-                accordingly
-            o_stats (imagine.her.Normalizer): normalizer for observations
-            g_stats (imagine.her.Normalizer): normalizer for goals
-            hidden (int): number of hidden units that should be used in hidden layers
-            layers (int): number of hidden layers
-        """
+"""
+
+class Feedforward(torch.nn.Module):
+    def __init__(self, input_size, layers_sizes):
+        super(Feedforward, self).__init__()
+        self.input_size = input_size
+        self.layers_sizes = layers_sizes
+        self.fc_layers = nn.ModuleList()
+        self.activations = []
+
+        size_tmp = self.input_size
+        for i, size in enumerate(self.layers_sizes):
+            self.activations.append(nn.ReLU() if i < len(self.layers_sizes) - 1 else None)
+            fc = torch.nn.Linear(size_tmp, size)
+            nn.init.kaiming_uniform_(fc.weight)
+            nn.init.zeros_(fc.bias)
+            self.fc_layers.append(fc)
+            size_tmp = size
+
+    def forward(self, input):
+        for fc, activation in zip(self.fc_layers, self.activations):
+            input = fc(input)
+            if activation:
+                input = activation(input)
+        return input
+
+
+class Actor(nn.Module):
+    def __init__(self, dims, layers, hidden):
+        super(Actor, self).__init__()
         self.layers = layers
-        self.dimo = dimo
-        self.dimg = dimg
-        self.dimu = dimu
+        self.dimo = dims['obs']
+        self.dimg = dims['g_encoding']
+        self.dimu = dims['acts']
+        self.inds_objs = dims['inds_objs']
         self.hidden = hidden
-        self.o_tf = inputs_tf['obs']
-        self.g_tf = inputs_tf['g_encoding']
-        self.u_tf = inputs_tf['acts']
 
-        half_o = int(self.o_tf.shape[1]) // 2
-        n_objs = len(inds_objs)
-        dim_obj = 2 * len(inds_objs[0])
-        dim_body = inds_objs[0][0] * 2
+        self.half_o = self.dimo // 2
+        self.n_objs = len(self.inds_objs)
+        self.dim_obj = 2 * len(self.inds_objs[0])
+        self.dim_body = self.inds_objs[0][0] * 2
 
-        o = self.o_tf
-        g = self.g_tf
+        self.fc_cast = Feedforward(self.dimg, [self.dim_body + self.dim_obj])
+        self.fc_actor = Feedforward(self.dim_body + self.dim_obj,
+                                    [self.hidden] + [self.n_objs * (self.dim_obj + self.dim_body)])
+        self.fc_pi = Feedforward(self.n_objs * (self.dim_obj + self.dim_body),
+                                 [self.hidden] * self.layers + [self.dimu])
 
+        self.sigmoid = nn.Sigmoid()
+        self.tanh = nn.Tanh()
 
-        if policy_architecture == 'modular_attention':
+    def forward(self, o, g):
+        attention = F.sigmoid(self.fc_cast(g))
+        obs_body = torch.cat(tensors=[o[:, :self.inds_objs[0][0]],
+                                      o[:, self.half_o: self.half_o + self.inds_objs[0][0]]], dim=1)
+        input_pi = torch.zeros([len(o), self.n_objs * (self.dim_obj + self.dim_body)])
+        for i in range(self.n_objs):
+            obs_obj = torch.cat(tensors=[o[:, self.inds_objs[i][0]: self.inds_objs[i][-1] + 1],
+                                         o[:,
+                                         self.inds_objs[i][0] + self.half_o: self.inds_objs[i][-1] + 1 + self.half_o]],
+                                dim=1)
+            body_obj_input = torch.cat(dim=1, tensors=[obs_body, obs_obj])
+            deepset_input = torch.mul(body_obj_input, attention)
 
-            # here we use the same net to map [obj + body] x attention to a latent space
-            # Then we sum these representations to use them as input of the policy / critic
-            # this implements a deep set
+            input_obj = F.relu(self.fc_actor(deepset_input))
+            input_pi += input_obj
 
-            with tf.variable_scope('pi'):
-                # cast embedding to attention in [0, 1]
-                self.attention = tf.nn.sigmoid(nn(g, [dim_body + dim_obj], name="attention"))
+        return self.tanh(self.fc_pi(input_pi))
 
-                obs_body = tf.concat(axis=1, values=[o[:, :inds_objs[0][0]],
-                                                     o[:, half_o: half_o + inds_objs[0][0]]])
-                input_objs = []
+    def get_attention(self, g):
+        return self.sigmoid(self.fc_cast(g))
 
-                # implement deepset
-                for i in range(n_objs):
-                    obs_obj = tf.concat(axis=1, values=[o[:, inds_objs[i][0]: inds_objs[i][-1] + 1],
-                                             o[:, inds_objs[i][0] + half_o: inds_objs[i][-1] + 1 + half_o]])
-                    body_obj_input = tf.concat(axis=1, values=[obs_body, obs_obj])
-
-                    # apply attention with Hadamard product
-                    deepset_input = tf.multiply(body_obj_input, self.attention)
-
-                    # use a same representer for all_obj
-                    input_obj = tf.nn.relu(nn(deepset_input, [self.hidden] + [n_objs * (dim_obj + dim_body)], name='obj', reuse=i>0))
-                    input_objs.append(input_obj)
-                # sum the latent representations
-                input_pi = tf.add_n(input_objs)
-                # final network to compute actions
-                self.pi_tf = tf.tanh(nn(input_pi, [self.hidden] * self.layers + [self.dimu], name='pi'))
-            with tf.variable_scope('Q'):
-                # build attention from embedding
-                self.critic_attention = tf.nn.sigmoid(nn(g, [dim_body + dim_obj + self.dimu], name="attention"))
-
-                obs_body = tf.concat(axis=1, values=[o[:, :inds_objs[0][0]],
-                                                     o[:, half_o: half_o + inds_objs[0][0]]])
-                input_objs = []
-                # implement deepset
-                for i in range(n_objs):
-                    obs_obj = tf.concat(axis=1, values=[o[:, inds_objs[i][0]: inds_objs[i][-1] + 1],
-                                                        o[:, inds_objs[i][0] + half_o: inds_objs[i][-1] + 1 + half_o]])
-                    body_obj_act_input = tf.concat(axis=1, values=[obs_body, obs_obj, self.pi_tf])
-
-                    # apply attention
-                    deepset_input = tf.multiply(body_obj_act_input, self.critic_attention)
-
-                    # use a same representer for all_obj
-                    input_obj = tf.nn.relu(nn(deepset_input, [self.hidden] + [n_objs * (dim_obj + dim_body + self.dimu)], name='obj', reuse=i > 0))
-                    input_objs.append(input_obj)
-                input_Q = tf.add_n(input_objs)
-                self.Q_pi_tf = nn(input_Q, [self.hidden] * self.layers + [1], name='critic')
+    def load_from_tf_params(self, params_dict, name='main'):
+        self.fc_cast.fc_layers[0].weight = torch.nn.Parameter(
+            torch.tensor(np.transpose(params_dict['ddpg/{}/pi/attention_0/kernel:0'.format(name)]),
+                         dtype=torch.float32))
+        self.fc_cast.fc_layers[0].bias = torch.nn.Parameter(
+            torch.tensor(params_dict['ddpg/{}/pi/attention_0/bias:0'.format(name)], dtype=torch.float32))
+        self.fc_actor.fc_layers[0].weight = torch.nn.Parameter(
+            torch.tensor(np.transpose(params_dict['ddpg/{}/pi/obj_0/kernel:0'.format(name)]), dtype=torch.float32))
+        self.fc_actor.fc_layers[0].bias = torch.nn.Parameter(
+            torch.tensor(params_dict['ddpg/{}/pi/obj_0/bias:0'.format(name)], dtype=torch.float32))
+        self.fc_actor.fc_layers[1].weight = torch.nn.Parameter(
+            torch.tensor(np.transpose(params_dict['ddpg/{}/pi/obj_1/kernel:0'.format(name)]), dtype=torch.float32))
+        self.fc_actor.fc_layers[1].bias = torch.nn.Parameter(
+            torch.tensor(params_dict['ddpg/{}/pi/obj_1/bias:0'.format(name)], dtype=torch.float32))
+        self.fc_pi.fc_layers[0].weight = torch.nn.Parameter(
+            torch.tensor(np.transpose(params_dict['ddpg/{}/pi/pi_0/kernel:0'.format(name)]), dtype=torch.float32))
+        self.fc_pi.fc_layers[0].bias = torch.nn.Parameter(
+            torch.tensor(params_dict['ddpg/{}/pi/pi_0/bias:0'.format(name)], dtype=torch.float32))
+        self.fc_pi.fc_layers[1].weight = torch.nn.Parameter(
+            torch.tensor(np.transpose(params_dict['ddpg/{}/pi/pi_1/kernel:0'.format(name)]), dtype=torch.float32))
+        self.fc_pi.fc_layers[1].bias = torch.nn.Parameter(
+            torch.tensor(params_dict['ddpg/{}/pi/pi_1/bias:0'.format(name)], dtype=torch.float32))
 
 
-                # for critic training
-                # build attention from embedding
-                self.critic_attention = tf.nn.sigmoid(nn(g, [dim_body + dim_obj + self.dimu], name="attention", reuse=True))
 
-                obs_body = tf.concat(axis=1, values=[o[:, :inds_objs[0][0]],
-                                                     o[:, half_o: half_o + inds_objs[0][0]]])
-                input_objs2 = []
-                # implement deepset
-                for i in range(n_objs):
-                    obs_obj = tf.concat(axis=1, values=[o[:, inds_objs[i][0]: inds_objs[i][-1] + 1],
-                                                        o[:, inds_objs[i][0] + half_o: inds_objs[i][-1] + 1 + half_o]])
-                    body_obj_act_input2 = tf.concat(axis=1, values=[obs_body, obs_obj, self.u_tf])
+class Critic(nn.Module):
+    def __init__(self, dims, layers, hidden):
+        super(Critic, self).__init__()
+        self.layers = layers
+        self.dimo = dims['obs']
+        self.dimg = dims['g_encoding']
+        self.dimu = dims['acts']
+        self.inds_objs = dims['inds_objs']
+        self.hidden = hidden
 
-                    # apply attention
-                    deepset_input2 = tf.multiply(body_obj_act_input2, self.critic_attention)
+        self.half_o = self.dimo // 2
+        self.n_objs = len(self.inds_objs)
+        self.dim_obj = 2 * len(self.inds_objs[0])
+        self.dim_body = self.inds_objs[0][0] * 2
 
-                    # use a same representer for all_obj
-                    input_obj2 = tf.nn.relu(nn(deepset_input2, [self.hidden] + [n_objs * (dim_obj + dim_body + self.dimu)], name='obj', reuse=True))
-                    input_objs2.append(input_obj2)
-                input_Q2 = tf.add_n(input_objs2)
-                self._input_Q = input_Q2  # exposed for tests
-                self.Q_tf = nn(input_Q2, [self.hidden] * self.layers + [1], name='critic', reuse=True)
+        self.fc_cast = Feedforward(self.dimg, [self.dim_body + self.dim_obj + self.dimu])
+        self.fc_critic = Feedforward(self.dim_body + self.dim_obj + self.dimu,
+                                     [self.hidden] + [self.n_objs * (self.dim_obj + self.dim_body + self.dimu)])
+        self.fc_Q = Feedforward(self.n_objs * (self.dim_obj + self.dim_body + self.dimu),
+                                [self.hidden] * self.layers + [1])
 
-        elif policy_architecture == 'modular_concat':
+        self.sigmoid = nn.Sigmoid()
+        self.tanh = nn.Tanh()
 
-            # here we use the same multi layer non linear net to map [obj + body] x attention to a latent space
-            # Then we sum these representations to use them as input of the policy / critic
-            # this implements a deep set
+    def forward(self, o, g, actions):
+        attention = F.sigmoid(self.fc_cast(g))
+        obs_body = torch.cat(tensors=[o[:, :self.inds_objs[0][0]],
+                                      o[:, self.half_o: self.half_o + self.inds_objs[0][0]]], dim=1)
+        input_Q = torch.zeros([len(o), self.n_objs * (self.dim_obj + self.dim_body + self.dimu)])
+        for i in range(self.n_objs):
+            obs_obj = torch.cat(tensors=[o[:, self.inds_objs[i][0]: self.inds_objs[i][-1] + 1],
+                                         o[:,
+                                         self.inds_objs[i][0] + self.half_o: self.inds_objs[i][-1] + 1 + self.half_o]],
+                                dim=1)
+            body_obj_act_input = torch.cat(dim=1, tensors=[obs_body, obs_obj, actions])
+            deepset_input = torch.mul(body_obj_act_input, attention)
 
-            with tf.variable_scope('pi'):
-                # build attention from embedding
+            input_obj = F.relu(self.fc_critic(deepset_input))
+            input_Q += input_obj
 
-                obs_body = tf.concat(axis=1, values=[o[:, :inds_objs[0][0]],
-                                                     o[:, half_o: half_o + inds_objs[0][0]]])
-                input_objs = []
-                # implement deepset
-                for i in range(n_objs):
-                    obs_obj = tf.concat(axis=1, values=[o[:, inds_objs[i][0]: inds_objs[i][-1] + 1],
-                                             o[:, inds_objs[i][0] + half_o: inds_objs[i][-1] + 1 + half_o]])
-                    body_obj_input = tf.concat(axis=1, values=[obs_body, obs_obj])
+        return self.fc_Q(input_Q)
 
-                    # apply attention
-                    deepset_input = tf.concat(axis=1, values=[body_obj_input, g])
+    def get_attention(self, g):
+        return self.sigmoid(self.fc_cast(g))
 
-                    # use a same representer for all_obj
-                    input_obj = tf.nn.relu(nn(deepset_input, [self.hidden] + [n_objs * (dim_obj + dim_body)], name='obj', reuse=i>0))
-                    input_objs.append(input_obj)
-                input_pi = tf.add_n(input_objs)
-                self.pi_tf = tf.tanh(nn(input_pi, [self.hidden] * self.layers + [self.dimu], name='pi'))
-            with tf.variable_scope('Q'):
-                # build attention from embedding
-
-                obs_body = tf.concat(axis=1, values=[o[:, :inds_objs[0][0]],
-                                                     o[:, half_o: half_o + inds_objs[0][0]]])
-                input_objs = []
-                # implement deepset
-                for i in range(n_objs):
-                    obs_obj = tf.concat(axis=1, values=[o[:, inds_objs[i][0]: inds_objs[i][-1] + 1],
-                                                        o[:, inds_objs[i][0] + half_o: inds_objs[i][-1] + 1 + half_o]])
-                    body_obj_act_input = tf.concat(axis=1, values=[obs_body, obs_obj, self.pi_tf])
-
-                    # apply attention
-                    deepset_input = tf.concat(axis=1, values=[body_obj_act_input, g])
-
-                    # use a same representer for all_obj
-                    input_obj = tf.nn.relu(nn(deepset_input, [self.hidden] + [n_objs * (dim_obj + dim_body + self.dimu)], name='obj', reuse=i > 0))
-                    input_objs.append(input_obj)
-                input_Q = tf.add_n(input_objs)
-                self.Q_pi_tf = nn(input_Q, [self.hidden] * self.layers + [1], name='critic')
-
-
-                # for critic training
-                # build attention from embedding
-
-                obs_body = tf.concat(axis=1, values=[o[:, :inds_objs[0][0]],
-                                                     o[:, half_o: half_o + inds_objs[0][0]]])
-                input_objs2 = []
-                # implement deepset
-                for i in range(n_objs):
-                    obs_obj = tf.concat(axis=1, values=[o[:, inds_objs[i][0]: inds_objs[i][-1] + 1],
-                                                        o[:, inds_objs[i][0] + half_o: inds_objs[i][-1] + 1 + half_o]])
-                    body_obj_act_input2 = tf.concat(axis=1, values=[obs_body, obs_obj, self.u_tf])
-
-                    # apply attention
-                    deepset_input2 = tf.concat(axis=1, values=[body_obj_act_input2, g])
-
-                    # use a same representer for all_obj
-                    input_obj2 = tf.nn.relu(nn(deepset_input2, [self.hidden] + [n_objs * (dim_obj + dim_body + self.dimu)], name='obj', reuse=True))
-                    input_objs2.append(input_obj2)
-                input_Q2 = tf.add_n(input_objs2)
-                self._input_Q = input_Q2  # exposed for tests
-                self.Q_tf = nn(input_Q2, [self.hidden] * self.layers + [1], name='critic', reuse=True)
-        elif policy_architecture == 'flat_concat':
-            # Networks.
-            with tf.variable_scope('pi'):
-                input_pi = tf.concat(axis=1, values=[o, g])  # for actor
-                self.pi_tf = tf.tanh(nn(input_pi, [self.hidden] * 2 + [self.dimu]))
-            with tf.variable_scope('Q'):
-                input_Q = tf.concat(axis=1, values=[o, g, self.pi_tf])
-                self.Q_pi_tf = nn(input_Q, [self.hidden] * 2 + [1])
-                # for critic training
-                input_Q = tf.concat(axis=1, values=[o, g, self.u_tf])
-                self._input_Q = input_Q  # exposed for tests
-                self.Q_tf = nn(input_Q, [self.hidden] * 2 + [1], reuse=True)
-
-        elif policy_architecture == 'flat_attention':
-            # Networks.
-            with tf.variable_scope('pi'):
-                # build attention from embedding
-                attention = tf.nn.sigmoid(nn(g, [o.shape[1]], name="attention"))
-                # apply attention
-                input_pi = tf.multiply(o, attention)
-                self.pi_tf = tf.tanh(nn(input_pi, [self.hidden] * 2 + [self.dimu], name='pi'))
-            with tf.variable_scope('Q'):
-                # build attention from embedding
-                attention = tf.nn.sigmoid(nn(g, [o.shape[1] + self.dimu], name="attention"))
-                obs_act_input = tf.concat(axis=1, values=[o, self.pi_tf])
-                # apply attention
-                input_Q = tf.multiply(obs_act_input, attention)
-                self.Q_pi_tf = nn(input_Q, [self.hidden] * 2 + [1], name='critic')
-
-                # for critic training
-                # build attention from embedding
-                attention = tf.nn.sigmoid(nn(g, [o.shape[1] + self.dimu], name="attention", reuse=True))
-                obs_act_input = tf.concat(axis=1, values=[o, self.u_tf])
-                # apply attention
-                input_Q2 = tf.multiply(obs_act_input, attention)
-                self.Q_tf = nn(input_Q2, [self.hidden] * 2 + [1], name='critic', reuse=True)
-        else:
-            raise NotImplementedError
-
+    def load_from_tf_params(self, params_dict, name='main'):
+        self.fc_cast.fc_layers[0].weight = torch.nn.Parameter(
+            torch.tensor(np.transpose(params_dict['ddpg/{}/Q/attention_0/kernel:0'.format(name)]),
+                         dtype=torch.float32))
+        self.fc_cast.fc_layers[0].bias = torch.nn.Parameter(
+            torch.tensor(params_dict['ddpg/{}/Q/attention_0/bias:0'.format(name)], dtype=torch.float32))
+        self.fc_critic.fc_layers[0].weight = torch.nn.Parameter(
+            torch.tensor(np.transpose(params_dict['ddpg/{}/Q/obj_0/kernel:0'.format(name)]), dtype=torch.float32))
+        self.fc_critic.fc_layers[0].bias = torch.nn.Parameter(
+            torch.tensor(params_dict['ddpg/{}/Q/obj_0/bias:0'.format(name)], dtype=torch.float32))
+        self.fc_critic.fc_layers[1].weight = torch.nn.Parameter(
+            torch.tensor(np.transpose(params_dict['ddpg/{}/Q/obj_1/kernel:0'.format(name)]), dtype=torch.float32))
+        self.fc_critic.fc_layers[1].bias = torch.nn.Parameter(
+            torch.tensor(params_dict['ddpg/{}/Q/obj_1/bias:0'.format(name)], dtype=torch.float32))
+        self.fc_Q.fc_layers[0].weight = torch.nn.Parameter(
+            torch.tensor(np.transpose(params_dict['ddpg/{}/Q/critic_0/kernel:0'.format(name)]), dtype=torch.float32))
+        self.fc_Q.fc_layers[0].bias = torch.nn.Parameter(
+            torch.tensor(params_dict['ddpg/{}/Q/critic_0/bias:0'.format(name)], dtype=torch.float32))
+        self.fc_Q.fc_layers[1].weight = torch.nn.Parameter(
+            torch.tensor(np.transpose(params_dict['ddpg/{}/Q/critic_1/kernel:0'.format(name)]), dtype=torch.float32))
+        self.fc_Q.fc_layers[1].bias = torch.nn.Parameter(
+            torch.tensor(params_dict['ddpg/{}/Q/critic_1/bias:0'.format(name)], dtype=torch.float32))
