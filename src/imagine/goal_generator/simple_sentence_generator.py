@@ -1,6 +1,6 @@
 from nltk import word_tokenize
-from src.imagine.goal_generator.descriptions import get_descriptions
-TRAIN_DESCR, TEST_DESCR, _ = get_descriptions()
+import numpy as np
+
 
 class SentenceGenerator:
     def __init__(self):
@@ -77,7 +77,7 @@ class RandomGoalGenerator(SentenceGenerator):
         return list(new_generated)
 
 class SentenceGeneratorHeuristic(SentenceGenerator):
-    def __init__(self, sentences=None, method='CGH'):
+    def __init__(self,  train_descriptions, test_descriptions, sentences=None, method='CGH'):
         super().__init__()
         self.sentence_types = []
         self.word_equivalence = []
@@ -87,6 +87,8 @@ class SentenceGeneratorHeuristic(SentenceGenerator):
         self.generated_set = set()
         self.generated_from_test = set()
         self.generated_garbage = set()
+        self.train_descriptions = train_descriptions
+        self.test_descriptions = test_descriptions
 
         if method == 'CGH':
             self.coverage = self.precision = None
@@ -176,7 +178,7 @@ class SentenceGeneratorHeuristic(SentenceGenerator):
         sents_in_test = []
         sents_not_in_test = []
         for s in sentence_set:
-            if s in TEST_DESCR:
+            if s in self.test_descriptions:
                 sents_in_test.append(s)
             else:
                 sents_not_in_test.append(s)
@@ -230,7 +232,7 @@ class SentenceGeneratorHeuristic(SentenceGenerator):
 
             if desired_counter_test != counter_test:
                 if counter_test == 64 - 8:
-                    for s in TEST_DESCR:
+                    for s in self.test_descriptions:
                         if 'flower' in s:
                             out.append(s)
                             counter_test += 1
@@ -276,14 +278,15 @@ class SentenceGeneratorHeuristic(SentenceGenerator):
         return out
 
 if __name__ == '__main__':
-    from src.imagine.goal_generator.descriptions import get_descriptions
-    from src.imagine.goal_generator.simple_sentence_generator import SentenceGeneratorHeuristic, RandomGoalGenerator
+    from src.playground_env.env_params import get_env_params
+    from src.playground_env.descriptions import generate_all_descriptions
 
-    train_descriptions, test_descriptions, _ = get_descriptions()
+    env_params = get_env_params()
+    train_descriptions, test_descriptions, _ = generate_all_descriptions(env_params)
     import numpy as np
 
     # np.random.shuffle(train_descriptions)
-    generator = SentenceGeneratorHeuristic(None, method='CGH')
+    generator = SentenceGeneratorHeuristic(train_descriptions, test_descriptions, None, method='CGH')
     generator.update_model(train_descriptions)
     new_descriptions = generator.generate_sentences()
 

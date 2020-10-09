@@ -1,131 +1,117 @@
-from src.playground_env.env_params import *
+from src.playground_env.env_params import get_env_params
 
 
-attributes = []
-if 'category' in ATTRIBUTE_LIST: attributes += group_names
-if 'type' in ATTRIBUTE_LIST: attributes += things
-if 'size' in ATTRIBUTE_LIST: attributes += thing_sizes
-if 'shade' in ATTRIBUTE_LIST: attributes += thing_shades
-if 'color' in ATTRIBUTE_LIST: attributes += thing_colors
-if 'relative_shade' in ATTRIBUTE_LIST: attributes += ['lighest', 'darkest']
-if 'relative_size' in ATTRIBUTE_LIST: attributes += ['biggest', 'smallest']
-if 'absolute_size' in ATTRIBUTE_LIST: attributes += ['left', 'right', 'top', 'bottom']
-attributes_restricted = attributes.copy()
-for a in attributes:
-    if a in things or a in group_names:
-        attributes_restricted.remove(a)
 
+def generate_all_descriptions(env_params):
 
-attributes_combinations = []
+    p = env_params.copy()
 
-def combine_two(attribute_a, attribute_b):
-    for a in attribute_a:
-        for b in attribute_b:
-            attributes_combinations.append('{} and {}'.format(a, b))
-            attributes_combinations.append('{} and {}'.format(b, a))
-
-def combine_three(attribute_a, attribute_b, attribute_c):
-    for a in attribute_a:
-        for b in attribute_b:
-            for c in attribute_c:
-                attributes_combinations.append('{}, {} and {}'.format(a, b, c))
-                attributes_combinations.append('{}, {} and {}'.format(a, c, b))
-                attributes_combinations.append('{}, {} and {}'.format(b, a, c))
-                attributes_combinations.append('{}, {} and {}'.format(b, c, a))
-                attributes_combinations.append('{}, {} and {}'.format(c, a, b))
-                attributes_combinations.append('{}, {} and {}'.format(c, b, a))
-
-
-# combine two
-combine_two(thing_colors, thing_shades)
-combine_two(thing_colors, thing_sizes)
-combine_two(thing_colors, things)
-combine_two(thing_colors, group_names)
-
-combine_two(thing_shades, thing_sizes)
-combine_two(thing_shades, things)
-combine_two(thing_shades, group_names)
-
-combine_two(thing_sizes, things)
-combine_two(thing_sizes, group_names)
-
-
-all_descriptions = []
-
-if 'Gripper' in admissible_actions:
-    gripper_descriptions = []
-    for d in ['left', 'right', 'bottom', 'top']:
-        gripper_descriptions.append('Go {}'.format(d))
-    for d1 in ['left', 'right']:
-        for d2 in ['top', 'bottom']:
-            gripper_descriptions.append('Go {} {}'.format(d2, d1))
-    gripper_descriptions.append('Go center')
-    all_descriptions += gripper_descriptions
-
-if 'Grasp' in admissible_actions:
-    grasp_descriptions = []
-    if 1 in MODES:
-        for attribute in attributes:
-            if attribute in thing_sizes + thing_shades + thing_colors :
-                grasp_descriptions.append('Grasp any {} thing'.format(attribute))
+    # Get the list of admissible attributes
+    name_attributes = ()
+    adjective_attributes = ()
+    for att_type in p['attributes'].keys():
+        if att_type in p['admissible_attributes']:
+            if att_type in ('types', 'categories'):
+                name_attributes += p['attributes'][att_type]
             else:
-                grasp_descriptions.append('Grasp any {}'.format(attribute))
-    if 2 in MODES:
-        for attribute in attributes_restricted:
-            for type in things + group_names:
-                grasp_descriptions.append('Grasp {} {}'.format(attribute, type))
+                adjective_attributes += p['attributes'][att_type]
 
-    all_descriptions += grasp_descriptions
+    find_category_of_attribute = env_params['extract_functions']['find_category_of_attribute']
+    check_if_relative = env_params['extract_functions']['check_if_relative']
+    combine_two = env_params['extract_functions']['combine_two']
 
 
-if 'Grow' in admissible_actions:
-    grow_descriptions = []
-    if 1 in MODES:
-        for attribute in attributes:
-            list_exluded = furnitures + supply + ['furniture', 'supply']
-            if attribute not in list_exluded:
-                if attribute in thing_sizes + thing_shades + thing_colors:
-                    grow_descriptions.append('Grow any {} thing'.format(attribute))
-                else:
-                    grow_descriptions.append('Grow any {}'.format(attribute))
-    if 2 in MODES:
-        for attribute in attributes_restricted:
-            for type in things + group_names:
-                list_exluded = furnitures + supply + ['furniture', 'supply']
-                if type not in list_exluded:
-                    grow_descriptions.append('Grow {} {}'.format(attribute, type))
-
-    all_descriptions += grow_descriptions
-
-# add extra descriptions
-extra_descriptions = []
-if 'Grow' in admissible_actions:
-    if 1 in MODES:
-        for attribute in attributes:
-            if attribute in plants + furnitures + ['plant', 'furniture']:
-                extra_descriptions.append('Attempt grow any {}'.format(attribute))
-    if 2 in MODES:
-        for attribute in attributes_restricted:
-            for type in plants + furnitures + ['plant', 'furniture']:
-                extra_descriptions.append('Attempt grow {} {}'.format(attribute, type))
+    # combine two
+    if p['attribute_combinations']:
+        adjective_attributes += combine_two(adjective_attributes, adjective_attributes)
 
 
+    all_descriptions = ()
+    
+    if 'Move' in p['admissible_actions']:
+        move_descriptions = []
+        for d in ['left', 'right', 'bottom', 'top']:
+            move_descriptions.append('Go {}'.format(d))
+        for d1 in ['left', 'right']:
+            for d2 in ['top', 'bottom']:
+                move_descriptions.append('Go {} {}'.format(d2, d1))
+        move_descriptions.append('Go center')
+        all_descriptions += tuple(move_descriptions)
+    
+    if 'Grasp' in p['admissible_actions']:
+        grasp_descriptions = []
+        for adj in adjective_attributes:
+            quantifier = 'any'  # 'the' if check_if_relative(adj) else 'a'
+            if not check_if_relative(adj):
+                for name in name_attributes:
+                    grasp_descriptions.append('Grasp {} {}'.format(adj, name))
+                    # grasp_descriptions.append('Grasp {} {} {}'.format(quantifier, adj, name))
+            grasp_descriptions.append('Grasp {} {} thing'.format(quantifier, adj))
+        for name in name_attributes:
+            # grasp_descriptions.append('Grasp a {}'.format(name))
+            grasp_descriptions.append('Grasp any {}'.format(name))
 
-train_descriptions = []
-test_descriptions = []
-for descr in all_descriptions:
-    to_remove = False
-    for w in words_to_remove_from_train:
-        if w in descr:
-            to_remove = True
-            break
-    if not to_remove:
-        train_descriptions.append(descr)
-    else:
-        test_descriptions.append(descr)
+        all_descriptions += tuple(grasp_descriptions)
+    
+    
+    if 'Grow' in p['admissible_actions']:
+        grow_descriptions = []
+        list_exluded = p['categories']['furniture'] + p['categories']['supply'] + ('furniture', 'supply')
+        for adj in adjective_attributes:
+            if adj not in list_exluded:
+                quantifier = 'any' #'the' if check_if_relative(adj) else 'a'
+                if not check_if_relative(adj):
+                    for name in name_attributes:
+                        if name not in list_exluded:
+                            grow_descriptions.append('Grow {} {}'.format(adj, name))
+                            # grow_descriptions.append('Grow {} {} {}'.format(quantifier, adj, name))
+                grow_descriptions.append('Grow {} {} thing'.format(quantifier, adj))
+        for name in name_attributes:
+            if name not in list_exluded:
+                # grow_descriptions.append('Grow a {}'.format(name))
+                grow_descriptions.append('Grow any {}'.format(name))
 
-train_descriptions = sorted(train_descriptions)
-test_descriptions = sorted(test_descriptions)
-extra_descriptions = sorted(extra_descriptions)
+        all_descriptions += tuple(grow_descriptions)
 
-stop = 1
+    if 'Grow' in p['admissible_actions']:
+        attempted_grow_descriptions = []
+        list_exluded = p['categories']['living_thing'] + ('living_thing', 'animal', 'plant')
+        for adj in adjective_attributes:
+            if adj not in list_exluded:
+                quantifier = 'any' #'the' if check_if_relative(adj) else 'a'
+                if not check_if_relative(adj):
+                    for name in name_attributes:
+                        if name not in list_exluded:
+                            # attempted_grow_descriptions.append('Attempted grow {} {} {}'.format(quantifier, adj, name))
+                            attempted_grow_descriptions.append('Attempted grow {} {}'.format(adj, name))
+                attempted_grow_descriptions.append('Attempted grow {} {} thing'.format(quantifier, adj))
+        for name in name_attributes:
+            if name not in list_exluded:
+                # attempted_grow_descriptions.append('Attempted grow a {}'.format(name))
+                attempted_grow_descriptions.append('Attempted grow any {}'.format(name))
+
+
+
+    train_descriptions = []
+    test_descriptions = []
+    for descr in all_descriptions:
+        to_remove = False
+        for w in p['words_test_set_def']:
+            if w in descr:
+                to_remove = True
+                break
+        if not to_remove:
+            train_descriptions.append(descr)
+        else:
+            test_descriptions.append(descr)
+    
+    train_descriptions = sorted(train_descriptions)
+    test_descriptions = sorted(test_descriptions)
+    extra_descriptions = sorted(attempted_grow_descriptions)
+
+    return train_descriptions, test_descriptions, extra_descriptions
+
+if __name__ == '__main__':
+    env_params = get_env_params()
+    train_descriptions, test_descriptions, extra_descriptions = generate_all_descriptions(env_params)
+    

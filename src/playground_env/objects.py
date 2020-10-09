@@ -1,212 +1,191 @@
 import pygame
+import numpy as np
+
+from src.playground_env.env_params import get_env_params
 from src.playground_env.color_generation import sample_color
-from src.playground_env.env_params import *
-from PIL import Image
 
-IMAGE_PATH = '../../playground_env/icons/'
-# IMAGE_PATH = './icons/'
-
-
-def get_pixel_coordinates(xpos, ypos):
-    return ((xpos + 1) / 2 * (SCREEN_SIZE * 2 / 3) + 1 / 6 * SCREEN_SIZE).astype(np.int), \
-           ((-ypos + 1) / 2 * (SCREEN_SIZE * 2 / 3) + 1 / 6 * SCREEN_SIZE).astype(np.int)
-
-
-def get_obj_identifier(object_type, color, shade, size):
-    type_id = str(things.index(object_type))
-    if len(type_id) == 1:
-        type_id = '0' + type_id
-
-    color_id = str(thing_colors.index(color))
-    shade_id = str(thing_shades.index(shade))
-    size_id = str(thing_sizes.index(size))
-    return type_id + color_id + shade_id + size_id
 
 
 class Thing:
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
+    def __init__(self, object_descr, object_id, object_id_int, params):
 
-        assert color in thing_colors
-        assert shade in thing_shades
-        assert size in thing_sizes
 
-        self.id = object_id
-        self.color = color
-        self.shade = shade
-        self.size = size
-        self.render_mode = False  # render_mode
-        self.attributes = []
-        if 'absolute location' in ATTRIBUTE_LIST:
-            self.absolute_location = ['center', 'center']
-            self.attributes = self.absolute_location
-        if 'categories' in ATTRIBUTE_LIST:
-            self.attributes += ['thing']
-        self.categories = ['movable', 'touchable']
-        self.relative_attributes = []
-        self.features = []
+        self.object_descr = object_descr
+        self.object_id = object_id
+        self.object_id_int = object_id_int
+        self.params = params
+        self.min_max_sizes = params['min_max_sizes']
+        self.admissible_attributes = params['admissible_attributes']
+        self.adm_abs_attributes = [a for a in self.admissible_attributes if 'relative' not in a]
+        self.adm_rel_attributes = [a for a in self.admissible_attributes if 'relative' in a]
 
-        self.type = None
-        self.type_encoding = None
+        self.agent_size = params['agent_size']
+        self.obj_size_update = params['obj_size_update']
+        self.get_attributes_functions = params['extract_functions']['get_attributes_functions']
+        self.img_path = params['img_path']
+
+        self.object_attributes = self.object_descr.copy()
+        self.object_initial_attributes = dict(zip(sorted(self.object_descr.keys()), [[self.object_descr[k]] for k in sorted(self.object_descr.keys())]))
+        for a in self.adm_rel_attributes:
+            self.object_initial_attributes[a] = []
+
+        self.rgb_code = None
         self.position = None
-        self.size_encoding = None
-        self.size_pixels = None
-        self.rgb_encoding = None
-        self.icon = None
-        self.objects = None
-
-        self.touched = False
+        self.size = None
+        self.type = None
         self.grasped = False
-
-        self.sample_position(objects)
-        self.sample_size()
-        self.sample_color()
-        self.initial_rgb_encoding = self.rgb_encoding.copy()
+        self.scene_objects = []
+        
+        self._get_type_encoding()
+        self._sample_position()
+        self._sample_color()
+        self._sample_size()
+        self.initial_rgb_code = self.rgb_code.copy()
 
         # rendering
         self.view = False
         self.patch = None
 
-    def give_ref_to_obj_list(self, objects):
-        self.objects = objects
+    def update_ref_to_scene_objects(self, scene_objects):
+        self.scene_objects = scene_objects
+        for k in self.admissible_attributes:
+            self._update_attribute(k)
 
-    def sample_color(self):
-        self.rgb_encoding = sample_color(color=self.color,
-                                         shade=self.shade)
-
-    def update_relative_attributes(self):
-        self.relative_attributes = []
-        if self.objects is not None:
-            if 'relative_shade' in ATTRIBUTE_LIST:
-                self.update_relative_shade_attribute()
-            if 'relative_size' in ATTRIBUTE_LIST:
-                self.update_relative_size_attribute()
-        if 'relative_location' in ATTRIBUTE_LIST:
-            self.update_relative_location_attributes()
-
-    def update_attributes(self):
-        if 'absolute_location' in ATTRIBUTE_LIST:
-            self.update_absolute_location_attributes(self.position)
-        if 'color' in ATTRIBUTE_LIST:
-            self.update_color_attributes()
-        if 'size' in ATTRIBUTE_LIST:
-            self.update_size_attribute()
-
-    def update_all_attributes(self):
-        self.update_attributes()
-        self.update_relative_attributes()
-
-    def update_size_attribute(self):
-        if self.size not in self.attributes:
-            self.attributes.append(self.size)
-
-    def update_color_attributes(self, old_color=None, old_shade=None):
-        if self.color not in self.attributes:
-            self.attributes.append(self.color)
-            if old_color is not None:
-                self.attributes.remove(old_color)
-        if 'shade' in ATTRIBUTE_LIST:
-            if self.shade not in self.attributes:
-                self.attributes.append(self.shade)
-                if old_shade is not None:
-                    self.attributes.remove(old_shade)
-
-    def update_relative_location_attributes(self):
-        if self.objects is not None:
-            for obj in self.objects:
-                if not (obj is self):
-                    if np.linalg.norm(self.position - obj.position) < NEXT_TO_EPSILON:
-                        for att in obj.attributes:
-                            if att not in ['left', 'right', 'top', 'bottom']:
-                                self.relative_attributes.append('next_to_' + att)
-
-
-    def update_absolute_location_attributes(self, new_position):
-        # update absolute geo_location of objects
-        if new_position[0] < 0:
-            self.attributes[0] = 'left'
+    # Sample physical attributes of the object
+    def _sample_color(self):
+        if 'colors' in self.admissible_attributes:
+            if 'shades' in self.admissible_attributes:
+                rgb_code = sample_color(color=self.object_initial_attributes['colors'][0],
+                                        shade=self.object_initial_attributes['shades'][0])
+            else:
+                rgb_code = sample_color(color=self.object_initial_attributes['colors'][0],
+                                        shade=np.random.choice(['light', 'dark']))
         else:
-            self.attributes[0] = 'right'
+            rgb_code = np.random.uniform(-1, 1, 3)
+        self._update_color(rgb_code)
+        
 
-        if new_position[1] < 0:
-            self.attributes[1] = 'bottom'
+    def _sample_size(self):
+        if 'sizes' in self.admissible_attributes:
+            if self.object_initial_attributes['sizes'][0] == 'small':
+                size = np.random.uniform(self.min_max_sizes[0][0], self.min_max_sizes[0][1])
+            elif self.object_initial_attributes['sizes'][0]  == 'big':
+                size = np.random.uniform(self.min_max_sizes[1][0], self.min_max_sizes[1][1])
+            else:
+                raise NotImplementedError
         else:
-            self.attributes[1] = 'top'
+            size = np.random.uniform(self.min_max_sizes[0][0], self.min_max_sizes[1][1])
+        self._update_size(size)
 
-    def update_relative_shade_attribute(self):
-
-        # update lightest / darkest attributes
-        self.darkest = True
-        self.lightest = True
-        for obj in self.objects:
-            if self.darkest or self.lightest and not (obj is self):
-                if obj.rgb_encoding.mean() < self.rgb_encoding.mean():
-                    self.darkest = False
-                elif obj.rgb_encoding.mean() > self.rgb_encoding.mean():
-                    self.lightest = False
-        if self.lightest:
-            self.relative_attributes.append('lightest')
-        elif self.darkest:
-            self.relative_attributes.append('darkest')
-
-    def update_relative_size_attribute(self):
-        # update biggest / smallest
-        self.biggest = True
-        self.smallest = True
-        for obj in self.objects:
-            if self.biggest or self.smallest and not (obj is self):
-                if obj.size_encoding < self.size_encoding:
-                    self.smallest = False
-                elif obj.size_encoding > self.size_encoding:
-                    self.biggest = False
-        if self.smallest:
-            self.relative_attributes.append('smallest')
-        elif self.biggest:
-            self.relative_attributes.append('biggest')
-
-        stop = 1
-
-    def update_position(self, new_position):
-        if 'absolute_location' in ATTRIBUTE_LIST:
-            self.update_absolute_location_attributes(new_position)
-        self.update_relative_attributes()
-
-        # update relative attributes
-        self.position = new_position.copy()
-
-    def get_type_encoding(self, object_type):
-        self.type_encoding = np.zeros([n_things])
-        self.type_encoding[things.index(object_type)] = 1
-
-    def sample_size(self):
-        if self.size == 'small':
-            self.size_encoding = np.random.uniform(min_max_sizes[0][0], min_max_sizes[0][1])
-        elif self.size == 'big':
-            self.size_encoding = np.random.uniform(min_max_sizes[1][0], min_max_sizes[1][1])
-        else:
-            raise NotImplementedError
-        self.size_pixels = int(RATIO_SIZE * self.size_encoding)
-
-    def sample_position(self, objects):
+    def _sample_position(self):
+        lows = (-1, -1)
+        highs = (1, 1)
+        if 'positions' in self.admissible_attributes:
+            if self.object_initial_attributes['positions'] == 'left':
+                highs = (0, 1)
+            elif self.object_initial_attributes['positions'] == 'right':
+                lows = (0, -1)
+            elif self.object_initial_attributes['positions'] == 'top':
+                lows = (-1, 0)
+            elif self.object_initial_attributes['positions'] == 'bottom':
+                highs = (1, 0)
+            else:
+                raise NotImplementedError
         ok = False
         while not ok:
-            candidate_position = np.random.uniform([-1.2, -1.2], [1.2, 1.2])
+            candidate_position = np.random.uniform(lows, highs)
             ok = True
-            for obj in objects:
-                if np.linalg.norm(obj.position - candidate_position) < EPSILON:
-                    ok = False
+            for obj in self.scene_objects:
+                if obj.position is not None:
+                    if np.linalg.norm(obj.position - candidate_position) < self.params['epsilon_initial_pos']:
+                        ok = False
             if ok:
-                self.update_position(candidate_position)
+                self._update_position(candidate_position)
 
-    def update_state(self, hand_position, gripper_state, objects, object_grasped, action):
+    # Update physical attributes of the object
+    def _update_size(self, new_size):
+        self.size = new_size
+        self.size_pixels = int(self.params['ratio_size'] * self.size)
+        self._update_attribute('sizes')
+        if self.scene_objects:
+            for obj in self.scene_objects:
+                obj._update_attribute('relative_sizes')
+                
+    def _update_color(self, new_rgb):
+        self.rgb_code = new_rgb
+        self._update_attribute('colors')
+        self._update_attribute('shades')
+        if self.scene_objects:
+            for obj in self.scene_objects:
+                obj._update_attribute('relative_colors')
+                obj._update_attribute('relative_shades')
+
+    def _update_position(self, new_position):
+        clipped_position = np.clip(new_position, -1, 1)
+        self.position = clipped_position.copy()
+        self._update_attribute('positions')
+        if self.scene_objects:
+            for obj in self.scene_objects:
+                obj._update_attribute('relative_positions')
+
+    def _update_attribute(self, attribute):
+        all_attributes = [k for k in self.admissible_attributes if attribute in k]
+        if len(self.scene_objects) > 0:
+            object_features = [o.get_features() for o in self.scene_objects]
+            for att in all_attributes:
+                self.object_attributes[att] = self.get_attributes_functions[att](object_features, self.object_id_int)
+
+    # Get type one hot code
+    def _get_type_encoding(self):
+        self.type = np.zeros([self.params['nb_types']])
+        self.type[self.params['attributes']['types'].index(self.object_initial_attributes['types'][0])] = 1
+
+
+    def enforce_relative_attributes(self):
+        oks = [False for _ in range(3)]
+        counter = 0
+        while not all(oks) and counter < 100:
+            if 'relative_positions' in self.admissible_attributes:
+                if self.object_attributes['relative_positions'] != self.object_initial_attributes['relative_positions']:
+                    self._sample_position()
+                else:
+                    oks[0] = True
+            else:
+                oks[0] = True
+            if 'relative_shades' in self.admissible_attributes:
+                if self.object_attributes['relative_shades'] != self.object_initial_attributes['relative_shades']:
+                    self._sample_color()
+                else:
+                    oks[1] = True
+            else:
+                oks[1] = True
+            if 'relative_sizes' in self.admissible_attributes:
+                if self.object_attributes['relative_sizes'] != self.object_initial_attributes['relative_sizes']:
+                    self._sample_size()
+                else:
+                    oks[2] = True
+            else:
+                oks[2] = True
+            counter += 1
+        return self.assert_equal_attributes(self.object_initial_attributes, self.object_attributes)
+
+
+    def assert_equal_attributes(self, att_1, att_2):
+        # assert that attributes 1 and included in attributes 2
+        assert sorted(att_1.keys()) == sorted(att_2.keys())
+        for k in att_1.keys():
+            for v in att_1[k]:
+                if att_2[k] is not None:
+                    if v not in att_2[k] :
+                        return False
+        return True
+
+    def update_state(self, agent_position, gripper_state, objects, object_grasped, action):
 
         update_object_grasped = object_grasped
 
-        # GRASP object
         # if the hand is close enough
-        if np.linalg.norm(self.position - hand_position) < (self.size_encoding + GRIPPER_SIZE) / 2:
-            if not self.touched and self.render_mode:
-                print('Touched :', self)
-            self.touched = True
+        if np.linalg.norm(self.position - agent_position) < (self.size + self.agent_size) / 2:
 
             # if an object is grasped
             if object_grasped:
@@ -220,34 +199,18 @@ class Thing:
                 if gripper_state:
                     self.grasped = True
                     update_object_grasped = True
-                    if self.render_mode:
-                        print('Grasped :', self)
 
-        else:
-            self.touched = False
 
         # if grasped, the object follows the hand
         if self.grasped:
-            self.update_position(hand_position.copy())
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
+            self._update_position(agent_position.copy())
+        self.features = self.get_features()
         return update_object_grasped
 
-    def update_color(self, new_color, new_shade, new_rgb):
-        old_color = self.color
-        old_shade = self.shade
-        self.color = new_color
-        self.shade = new_shade
-        self.rgb_encoding = new_rgb
-        self.update_color_attributes(old_color, old_shade)
-        if self.objects:
-            for obj in self.objects:
-                obj.update_relative_attributes()
-
-    def update_size(self, new_size):
-        self.size_encoding = new_size
-        self.size_pixels = int(RATIO_SIZE * self.size_encoding)
+    def get_features(self):
+        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
+        features = np.concatenate([self.type, self.position, np.array([self.size]), self.rgb_code, grasped_feature])
+        return features
 
     def _color_surface(self, surface, rgb):
 
@@ -256,14 +219,16 @@ class Thing:
         arr[:, :, 1] = rgb[1]
         arr[:, :, 2] = rgb[2]
 
-
+    def get_pixel_coordinates(self, xpos, ypos):
+        return ((xpos + 1) / 2 * (self.params['screen_size'] * 2 / 3) + 1 / 6 * self.params['screen_size']).astype(np.int), \
+               ((-ypos + 1) / 2 * (self.params['screen_size'] * 2 / 3) + 1 / 6 * self.params['screen_size']).astype(np.int)
 
     def update_rendering(self, viewer):
-        x, y = get_pixel_coordinates(self.position[0], self.position[1])
+        x, y = self.get_pixel_coordinates(self.position[0], self.position[1])
         left = int(x - self.size_pixels // 2)
         top = int(y - self.size_pixels // 2)
 
-        color = tuple(self.rgb_encoding * 255)
+        color = tuple(self.rgb_code * 255)
         # pygame.draw.rect(self.icon, color, (0, 0, self.size_pixels - 1, self.size_pixels - 1), 6)
         self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
         self.surface = self.icon.copy()
@@ -272,108 +237,63 @@ class Thing:
         # viewer.blit(self.icon, (left, top))
 
     def __repr__(self):
-        return 'Object # {}: {} {} {} {}'.format(self.id, self.size, self.shade, self.color, self.type)
+        msg = '\n\nOBJ #{}: '.format(self.object_id_int)
+        for att in self.object_attributes:
+            msg += '\n\t{}: {}'.format(att, self.object_attributes[att])
+        return msg
 
 
 
 
 
 class LivingThings(Thing):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        if 'category' in ATTRIBUTE_LIST:
-            self.attributes += ['living_thing']
-        self.categories += ['combinable']
-        self.counter_food = 0
-        self.counter_water = 0
-        self.size_update = 0.04
-        self.size_ind = 0 if self.size == 'small' else 1
-        self.talked = False
-        self.pet = False
-
-    def update_state(self, hand_position, gripper_state, objects, object_grasped, action):
-        grasped = super().update_state(hand_position, gripper_state, objects, object_grasped, action)
-
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        return grasped
+    def __init__(self,  object_descr, object_id, object_id_int, params):
+        super().__init__( object_descr, object_id, object_id_int, params)
 
 
 class Animals(LivingThings):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        if 'category' in ATTRIBUTE_LIST:
-            self.attributes += ['animal']
-        self.freeze = False
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
 
     def update_state(self, hand_position, gripper_state, objects, object_grasped, action):
-        grasped = super().update_state(hand_position, gripper_state, objects, object_grasped, action)
+
         # check whether water or food is close
         for obj in objects:
-            if obj.type == 'water' or obj.type == 'food':
+            if obj.object_descr['categories'] == 'supply':
                 # check distance
-                if np.linalg.norm(obj.position - self.position) < (self.size_encoding + obj.size_encoding) / 2:
+                if np.linalg.norm(obj.position - self.position) < (self.size + obj.size) / 2:
                     # check action
-                    size_encoding = min(self.size_encoding + self.size_update, min_max_sizes[1][1] + self.size_update)
-                    if self.render_mode:
-                        print(obj.type, ' over:', self)
-                        print('Growing Living Thing {}:'.format(size_encoding), self)
-                    self.update_size(size_encoding)
+                    size = min(self.size + self.obj_size_update, self.min_max_sizes[1][1] + self.obj_size_update)
+                    self._update_size(size)
 
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        return grasped
+        return super().update_state(hand_position, gripper_state, objects, object_grasped, action)
 
 
 class Furnitures(Thing):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        if 'category' in ATTRIBUTE_LIST:
-            self.attributes += ['furniture']
-
-    def update_state(self, hand_position, gripper_state, objects, object_grasped, action):
-        grasped = super().update_state(hand_position, gripper_state, objects, object_grasped, action)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        return grasped
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
 
 
 class Plants(LivingThings):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        if 'category' in ATTRIBUTE_LIST:
-            self.attributes += ['plant']
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+       
 
     def update_state(self, hand_position, gripper_state, objects, object_grasped, action):
-        grasped = super().update_state(hand_position, gripper_state, objects, object_grasped, action)
         # check whether water or food is close
         for obj in objects:
-            if obj.type == 'water':
+            if obj.object_descr['types'] == 'water':
                 # check distance
-                if np.linalg.norm(obj.position - self.position) < (self.size_encoding + obj.size_encoding) / 2:
+                if np.linalg.norm(obj.position - self.position) < (self.size + obj.size) / 2:
                     # check action
-                    size_encoding = min(self.size_encoding + self.size_update, min_max_sizes[1][1] + self.size_update)
-                    if self.render_mode:
-                        print(obj.type, ' over:', self)
-                        print('Growing Living Thing {}:'.format(size_encoding), self)
-                    self.update_size(size_encoding)
-
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        return grasped
+                    size = min(self.size + self.obj_size_update, self.min_max_sizes[1][1] + self.obj_size_update)
+                    self._update_size(size)
+        return super().update_state(hand_position, gripper_state, objects, object_grasped, action)
 
 
 class Supplies(Thing):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        if 'category' in ATTRIBUTE_LIST:
-            self.attributes += ['supply']
-        self.categories += ['combinable']
-        self.grasped = False
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
 
 
 
@@ -382,162 +302,82 @@ class Supplies(Thing):
 # # # # # # # # # # # # # # # # # #
 
 class Dog(Animals):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'dog'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['dog']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'dog.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'dog.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Cat(Animals):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'cat'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['cat']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'cat.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'cat.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Human(Animals):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'human'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['human']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'human.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'human.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Fly(Animals):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'fly'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['fly']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'fly.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'fly.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Parrot(Animals):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'parrot'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['parrot']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'parrot.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'parrot.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Mouse(Animals):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'mouse'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['mouse']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'mouse.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'mouse.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Lion(Animals):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'lion'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['lion']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'lion.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'lion.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Pig(Animals):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'pig'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['pig']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'pig.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'pig.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Cow(Animals):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'cow'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['cow']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'cow.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'cow.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Cameleon(Animals):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'cameleon'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['cameleon']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'cameleon.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'cameleon.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
@@ -546,162 +386,82 @@ class Cameleon(Animals):
 # # # # # # # # # # # # # # # # # #
 
 class Cactus(Plants):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'cactus'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['cactus']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'cactus.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'cactus.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Rose(Plants):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'rose'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['rose']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'rose.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'rose.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Grass(Plants):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'grass'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['grass']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'grass.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'grass.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Bonsai(Plants):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'bonsai'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['bonsai']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'bonsai.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'bonsai.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Algae(Plants):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'algae'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['algae']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'algae.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'algae.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Carnivorous(Plants):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'carnivorous'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['carnivorous']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'carnivorous.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'carnivorous.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Tree(Plants):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'tree'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['tree']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'tree.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'tree.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Bush(Plants):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'bush'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['bush']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'bush.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'bush.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Tea(Plants):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'tea'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['tea']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'tea.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'tea.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Flower(Plants):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'flower'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['flower']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'flower.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'flower.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
@@ -710,183 +470,83 @@ class Flower(Plants):
 # # # # # # # # # # # # # # # # # #
 
 class Chair(Furnitures):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'chair'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['chair']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'chair.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'chair.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Sofa(Furnitures):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'sofa'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['sofa']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'sofa.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'sofa.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Sink(Furnitures):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'sink'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['sink']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'sink.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'sink.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Window(Furnitures):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'window'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['window']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'window.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'window.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Carpet(Furnitures):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'carpet'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['carpet']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'carpet.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'carpet.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Cupboard(Furnitures):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'cupboard'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['cupboard']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'cupboard.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'cupboard.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Desk(Furnitures):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'desk'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['desk']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'desk.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'desk.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Lamp(Furnitures):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'lamp'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['lamp']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'lamp.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'lamp.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Door(Furnitures):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'door'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['door']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'door.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'door.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Table(Furnitures):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'table'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['table']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'table.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'table.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
-
-    def update_state(self, hand_position, gripper_state, objects, object_grasped, action):
-        grasped = super().update_state(hand_position, gripper_state, objects, object_grasped, action)
-        # check whether water or food is close
-        for obj in objects:
-            if obj.type == 'food':
-                # check distance
-                if np.linalg.norm(obj.position - self.position) < (self.size_encoding + obj.size_encoding) / 2:
-                    # check action
-                    self.rgb_encoding = np.zeros([3])
-                    assert not np.all(self.rgb_encoding == self.initial_rgb_encoding)
-                    if self.render_mode:
-                        print(obj.type, ' over:', self)
-                        print('Put food on the table.', self)
-
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        return grasped
-
 
 # # # # # # # # # # # # # # # # # #
 # Supply
@@ -894,60 +554,67 @@ class Table(Furnitures):
 
 
 class Water(Supplies):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'water'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['water']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'water.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'water.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
 class Food(Supplies):
-    def __init__(self, color, shade, size, object_id, objects, render_mode):
-        super().__init__(color, shade, size, object_id, objects, render_mode)
-        self.type = 'food'
-        self.get_type_encoding(self.type)
-        grasped_feature = np.array([1]) if self.grasped else np.array([-1])
-        self.features = np.concatenate(
-            [self.type_encoding, self.position, np.array([self.size_encoding]), self.rgb_encoding, grasped_feature])
-        if 'type' in ATTRIBUTE_LIST:
-            self.attributes += ['food']
-        self.obj_identifier = get_obj_identifier(self.type, color, shade, size)
-        if render_mode:
-            self.icon = pygame.image.load(IMAGE_PATH + 'food.png')
+    def __init__(self, object_descr, object_id, object_id_int, params):
+        super().__init__(object_descr, object_id, object_id_int, params)
+        if params['render_mode']:
+            self.icon = pygame.image.load(self.img_path + 'food.png')
             self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
 
 
-if 'small' in ENV_ID:
-    things_classes = [Dog, Cat, Cameleon, Human, Fly,
-                      Cactus, Carnivorous, Flower, Tree, Bush,
-                      Door, Chair, Desk, Lamp, Table,
-                      Food, Water]
+obj_type_to_obj = dict(dog=Dog,
+                       cat=Cat,
+                       chameleon=Cameleon,
+                       human=Human,
+                       fly=Fly,
+                       parrot=Parrot,
+                       mouse=Mouse,
+                       lion=Lion,
+                       pig=Pig,
+                       cow=Cow,
+                       cactus=Cactus,
+                       carnivorous=Carnivorous,
+                       flower=Flower,
+                       tree=Tree,
+                       bush=Bush,
+                       grass=Grass,
+                       algae=Algae,
+                       tea=Tea,
+                       rose=Rose,
+                       bonsai=Bonsai,
+                       door=Door,
+                       chair=Chair,
+                       desk=Desk,
+                       lamp=Lamp,
+                       table=Table,
+                       cupboard=Cupboard,
+                       sink=Sink,
+                       window=Window,
+                       sofa=Sofa,
+                       carpet=Carpet,
+                       food=Food,
+                       water=Water)
 
-elif 'big' in ENV_ID:
-    things_classes = [Dog, Cat, Cameleon, Human, Fly, Parrot, Mouse, Lion, Pig, Cow,
-                      Cactus, Carnivorous, Flower, Tree, Bush, Grass, Algae, Tea, Rose, Bonsai,
-                      Door, Chair, Desk, Lamp, Table, Cupboard, Sink, Window, Sofa, Carpet,
-                      Food, Water]
-
-else:
-    raise NotImplementedError
 
 
-#
+def generate_objects(objects_descr, objects_ids, params):
 
-def build_object(object_type, color, shade, size, object_id, objects, render_mode):
-    assert object_type in things
-    obj_class = things_classes[things.index(object_type)](color, shade, size, object_id, objects, render_mode)
-    assert obj_class.type == object_type, '{}, {}'.format(obj_class.type, object_type)
-    return obj_class
+    objs = [obj_type_to_obj[o['types']](o, o_id, o_id_int, params) for o, o_id, o_id_int in zip(objects_descr, objects_ids, range(len(objects_descr)))]
+    for o in objs:
+        o.update_ref_to_scene_objects(objs)
+        o._sample_position()
+    oks = [False for _ in range(len(objs))]
+    while not all(oks):
+        for i_o, o in enumerate(objs):
+            oks[i_o] = o.enforce_relative_attributes()
+    return objs
 
 
 stop = 1

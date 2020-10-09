@@ -8,17 +8,14 @@ import gym
 
 from src import logger
 from src.imagine.rl.ddpg import DDPG
-from src.utils.util import find_save_path, set_global_seeds
+from src.utils.util import find_save_path, set_global_seeds, clean_dict_for_json
 from src.utils.nlp_tools import OneHotEncoder, analyze_descr, Vocab
 from src.imagine.rl.her import make_sample_her_transitions as make_sample_her_transitions_biased
 from src.imagine.reward_function.classifier_reward_function_lstm_pretrained import RewardFunctionLSTMPretrained
 from src.imagine.reward_function.classifier_reward_function_lstm_learned import RewardFunctionLSTM
 from src.imagine.reward_function.oracle_reward_function_playground import OracleRewardFunction as OraclePlayground
-from src.playground_env.descriptions import train_descriptions as train_descriptions_env
-from src.playground_env.descriptions import test_descriptions as test_descriptions_env
-from src.playground_env.descriptions import extra_descriptions as extra_descriptions_env
-from src.imagine.goal_generator.descriptions import get_descriptions
-from src.playground_env.env_params import N_OBJECTS_IN_SCENE, ENV_ID
+from src.playground_env.descriptions import generate_all_descriptions
+from src.imagine.goal_generator.simple_sentence_generator import SentenceGeneratorHeuristic
 from src.imagine.language_model import LanguageModelLSTM
 
 HOME = os.environ['HOME']
@@ -42,7 +39,6 @@ DEFAULT_CONFIG = dict(experiment_params=dict(trial_id=0,
                                              method_test='robin'  # test all instructions one after the other
                                              ),
                       conditions=dict(env_name='PlaygroundNavigation-v1',
-                                      env_id=ENV_ID,
                                       policy_architecture='modular_attention',  # 'flat_concat', 'flat_attention', 'modular_attention'
                                       imagination_method='CGH',
                                       policy_encoding='lstm',  # policy encoding
@@ -82,7 +78,7 @@ DEFAULT_CONFIG = dict(experiment_params=dict(trial_id=0,
                                            early_stopping='f1',
                                            n_batch=200,  # number of batches per epoch
                                            freq_update=2,  # train the reward function every x RL training epochs
-                                           n_objs=N_OBJECTS_IN_SCENE,
+                                           n_objs=3,
                                            learning_rate=0.001,
                                            ff_size=100,  # size of hidden layer in reward function
                                            num_hidden_lstm=100  # number of hidden states in language model lstm
@@ -109,13 +105,35 @@ def configure_everything(rank, seed, num_cpu, env, trial_id, n_epochs, reward_fu
 
     # Prepare params.
     params = DEFAULT_CONFIG
-    train_descriptions, test_descriptions, all_descriptions = get_descriptions(ENV_ID)
-    assert sorted(train_descriptions) == sorted(train_descriptions_env)
-    assert sorted(test_descriptions) == sorted(test_descriptions_env)
+
+    # Env generating function
+    def make_env():
+        return gym.make(params['conditions']['env_name'])
+
+
+    # Get info from environment and configure dimensions dict
+    tmp_env = make_env()
+    tmp_env.reset()
+    params['env_params'] = tmp_env.unwrapped.params
+    params['learning_params']['T'] = tmp_env._max_episode_steps
+    params['learning_params']['gamma'] = 1. - 1. / params['learning_params']['T']
+    params['reward_function']['n_objs'] = params['env_params']['max_nb_objects']
+    params['make_env'] = make_env
+
+    train_descriptions, test_descriptions, extra_descriptions = generate_all_descriptions(params['env_params'])
+    # compute imagined goals to get the list of all possible goals
+    goal_generator = SentenceGeneratorHeuristic(train_descriptions, test_descriptions, sentences=None, method='CGH')
+    goal_generator.update_model(train_descriptions + test_descriptions)
+    imagined_descriptions = goal_generator.generate_sentences()
+    all_descriptions = train_descriptions + test_descriptions + imagined_descriptions
+
+    # train_descriptions, test_descriptions, all_descriptions = get_descriptions(ENV_ID)
+    # assert sorted(train_descriptions) == sorted(train_descriptions_env)
+    # assert sorted(test_descriptions) == sorted(test_descriptions_env)
     params.update(date_time=str(datetime.datetime.now()),
                   train_descriptions=train_descriptions,
                   test_descriptions=test_descriptions,
-                  extra_descriptions=extra_descriptions_env,
+                  extra_descriptions=extra_descriptions,
                   all_descriptions=all_descriptions,
                   git_commit=git_commit
                   )
@@ -172,15 +190,6 @@ def configure_everything(rank, seed, num_cpu, env, trial_id, n_epochs, reward_fu
     params['social_partner_params'] = dict(feedback_strategy=feedback_strategy,
                                            p_availability=p_partner_availability)
 
-    # Env generating function
-    def make_env():
-        return gym.make(params['conditions']['env_name'])
-
-    # Get info from environment and configure dimensions dict
-    tmp_env = make_env()
-    tmp_env.reset()
-    params['learning_params']['T'] = tmp_env._max_episode_steps
-    params['learning_params']['gamma'] = 1. - 1. / params['learning_params']['T']
 
     if params['conditions']['policy_encoding'] == 'lstm':
         dim_encoding = params['reward_function']['num_hidden_lstm']
@@ -228,18 +237,18 @@ def configure_everything(rank, seed, num_cpu, env, trial_id, n_epochs, reward_fu
         params['or_params_path'][n_obj] = REPO_PATH + '/src/data/or_function/or_params_{}objs.pk'.format(n_obj)
 
     # Save parameter dict
+
     if rank == 0:
+        json_dict = clean_dict_for_json(params)
         with open(os.path.join(logger.get_dir(), 'params.json'), 'w') as f:
-            json.dump(params, f)
+            json.dump(json_dict, f)
         for key in sorted(params.keys()):
             logger.info('{}: {}'.format(key, params[key]))
 
-    params['make_env'] = make_env
-
     return params, rank_seed
 
-def get_one_hot_encoder():
-    _, max_seq_length, word_set = analyze_descr(get_descriptions(ENV_ID)[2])
+def get_one_hot_encoder(all_descriptions):
+    _, max_seq_length, word_set = analyze_descr(all_descriptions)
     vocab = Vocab(word_set)
     one_hot_encoder = OneHotEncoder(vocab, max_seq_length)
     return one_hot_encoder

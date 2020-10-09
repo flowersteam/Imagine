@@ -1,5 +1,4 @@
-import click
-import pickle
+import argparse
 import json
 import sys
 
@@ -11,19 +10,13 @@ import src.imagine.experiment.config as config
 from src.imagine.interaction import RolloutWorker
 from src.imagine.goal_sampler import GoalSampler
 from src.playground_env.reward_function import get_reward_from_state
-from src.imagine.goal_generator.descriptions import get_descriptions
-from src.playground_env.env_params import ENV_ID
+from src.playground_env.descriptions import generate_all_descriptions
 
-PATH = '../../../pretrained_weights/'
-EPOCH = 160
+PATH = '/home/flowers/Desktop/Scratch/Imagine/src/data/expe/PlaygroundNavigation-v1/2033/' #'../../../pretrained_weights/'
+EPOCH = 0
 POLICY_FILE = PATH + 'policy_checkpoints/policy_{}.pkl'.format(EPOCH)
 PARAMS_FILE = PATH + 'params.json'
 
-@click.command()
-@click.argument('policy_file', type=str, default=POLICY_FILE)
-@click.option('--seed', type=int, default=int(np.random.randint(1e6)))
-@click.option('--n_test_rollouts', type=int, default=1)
-@click.option('--render', type=int, default=1)
 def main(policy_file, seed, n_test_rollouts, render):
     set_global_seeds(seed)
 
@@ -54,7 +47,7 @@ def main(policy_file, seed, n_test_rollouts, render):
 
     policy_language_model, reward_language_model = config.get_language_models(params)
 
-    onehot_encoder = config.get_one_hot_encoder()
+    onehot_encoder = config.get_one_hot_encoder(params['all_descriptions'])
     # Define the goal sampler for training
     goal_sampler = GoalSampler(policy_language_model=policy_language_model,
                                reward_language_model=reward_language_model,
@@ -74,6 +67,7 @@ def main(policy_file, seed, n_test_rollouts, render):
     policy = config.configure_learning_algo(reward_function=reward_function,
                                             goal_sampler=goal_sampler,
                                             params=params)
+
     policy.load_params(POLICY_FILE)
 
     evaluation_worker = RolloutWorker(make_env=params['make_env'],
@@ -87,7 +81,7 @@ def main(policy_file, seed, n_test_rollouts, render):
     # Run evaluation.
     evaluation_worker.clear_history()
 
-    _, test_descriptions, _ = get_descriptions(ENV_ID)
+    _, test_descriptions, _ = generate_all_descriptions(env.unwrapped.params)
 
     np.random.shuffle(test_descriptions)
     successes_test_descr = []
@@ -108,5 +102,14 @@ def main(policy_file, seed, n_test_rollouts, render):
         print('Success rate {}: {}'.format(d, np.mean(successes_test_descr[-1])))
     print('Global success rate: {}'.format(np.mean(successes_test_descr)))
 
+
+
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    add = parser.add_argument
+    add('--policy_file', type=str, default=POLICY_FILE)
+    add('--seed', type=int, default=int(np.random.randint(1e6)))
+    add('--n_test_rollouts', type=int, default=1)
+    add('--render', type=int, default=1)
+    kwargs = vars(parser.parse_args())
+    main(**kwargs)

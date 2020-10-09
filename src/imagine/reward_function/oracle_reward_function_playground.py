@@ -9,6 +9,7 @@ class OracleRewardFunction:
         self.goal_sampler = goal_sampler
         self.convert_from_discovery_ids = convert_from_discovery_ids
         self.get_reward_from_state = get_reward_from_state
+        self.env_params = params['env_params']
 
     def store(self, data):
         pass
@@ -48,10 +49,10 @@ class OracleRewardFunction:
         state = episode['obs'][ind_transition]
         successes = []
         for i in self.descriptions:
-            successes.append(int(self.get_reward_from_state(state, i)))
+            successes.append(int(self.get_reward_from_state(state, i, self.env_params)))
         return np.array(successes)
 
 
     def eval_goal_from_episode(self, episode, goal_id):
         state = episode['obs'][-1]
-        return int(self.get_reward_from_state(state, self.descriptions[goal_id]))
+        return int(self.get_reward_from_state(state, self.descriptions[goal_id], self.env_params))

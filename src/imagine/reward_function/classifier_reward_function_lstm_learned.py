@@ -29,7 +29,7 @@ class RewardFunctionLSTM:
         n_obj = len(inds_obj)
         state_size = params['dims']['obs']
         self.goal_sampler = goal_sampler
-        self.reward_function = RewardFunctionCastAttentionShareMax(or_params_path=params['or_params_path'],
+        self.reward_function = RewardFunctionCastAttentionShareOr(or_params_path=params['or_params_path'],
                                                                   body_size=body_size,
                                                                   obj_size=obj_size,
                                                                   n_obj=n_obj,

@@ -263,7 +263,6 @@ class DDPG(object):
             assign_ops.append(v.assign(params[v.name]))
         self.sess.run(assign_ops)
 
-
     def _create_network(self, reuse=False):
         if MPI.COMM_WORLD.Get_rank() == 0:
             logger.info("Creating a DDPG agent with action space %d..." % (self.dimu))

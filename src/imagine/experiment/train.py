@@ -27,7 +27,7 @@ IMAG_METHOD = 'CGH'
 REW_FUNC = 'learned_lstm'
 POLICY_ARCHITECTURE = 'modular_attention'
 POLICY_ENCODING = 'lstm'
-GOAL_INVENTION = 'from_epoch_10'
+GOAL_INVENTION = 'from_epoch_1'
 SOCIAL_STRATEGY = 'exhaustive'
 P_PARTNER_AVAIL = 1
 RL_RATIO_POSITIVE = 0.5
@@ -180,7 +180,7 @@ def launch(**kwargs):
     policy_language_model, reward_language_model = config.get_language_models(params)
 
     # Define the one-hot_encoder
-    onehot_encoder = config.get_one_hot_encoder()
+    onehot_encoder = config.get_one_hot_encoder(params['train_descriptions'] + params['test_descriptions'])
 
     # Define the goal sampler for training
     goal_sampler = GoalSampler(policy_language_model=policy_language_model,
@@ -212,7 +212,8 @@ def launch(**kwargs):
 
     # Define the social partner
     social_partner = SocialPartner(oracle_reward_function=oracle_reward_function,
-                                   **params['social_partner_params'])
+                                   **params['social_partner_params'],
+                                   params=params)
 
     # Define the data processor
     data_processor = DataProcessor(reward_function=reward_function,

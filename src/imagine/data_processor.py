@@ -3,10 +3,7 @@ from collections import deque
 
 import numpy as np
 from mpi4py import MPI
-from scipy.stats import entropy
 from src.utils.util import mpi_average
-from src import logger
-from src.playground_env.env_params import N_OBJECTS_IN_SCENE, n_inds_before_obj_inds, DIM_OBJ, position_inds
 
 
 class ExplorationTracker:

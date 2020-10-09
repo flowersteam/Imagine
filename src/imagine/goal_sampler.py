@@ -40,7 +40,10 @@ class GoalSampler:
                                    competence=[],
                                    lp=[])
         self.one_hot_encoder = one_hot_encoder
-        self.goal_generator = SentenceGeneratorHeuristic(sentences=None, method=params['conditions']['imagination_method'])
+        self.goal_generator = SentenceGeneratorHeuristic(params['train_descriptions'],
+                                                         params['test_descriptions'],
+                                                         sentences=None,
+                                                         method=params['conditions']['imagination_method'])
         self.nb_discovered_goals = 0
         self.score_target_goals = None
         self.perceived_learning_progress = None

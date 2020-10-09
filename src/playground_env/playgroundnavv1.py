@@ -1,10 +1,11 @@
 from __future__ import division
 import gym
 from gym import spaces
-
-from src.playground_env.objects import *
+import numpy as np
+import pygame
+from src.playground_env.objects import generate_objects
 from src.playground_env.reward_function import *
-
+from src.playground_env.env_params import get_env_params
 
 class PlayGroundNavigationV1(gym.Env):
     metadata = {
@@ -13,19 +14,54 @@ class PlayGroundNavigationV1(gym.Env):
     }
 
     '''
-        Playground Environement:
+        Playground Environment:
         set reward_screen to True to visualize modular reward function predictions
         set viz_data_collection to True to visualize Social Partner interactions 
     '''
     def __init__(self,
-                 n_timesteps=50,
-                 epsilon=0.1,
+                 max_timesteps=50,
                  random_init=False,
-                 render=False,
                  human=False,
                  reward_screen=False,
-                 viz_data_collection=False
+                 viz_data_collection=False,
+
+                 agent_step_size=0.15,
+                 agent_initial_pos=(0,0),
+                 agent_initial_pos_range=0.6,
+                 max_nb_objects=3,  # number of objects in the scene
+                 random_nb_obj=False,
+                 admissible_actions=('Move', 'Grasp', 'Grow'),  # which types of actions are admissible
+                 admissible_attributes=('colors', 'categories', 'types'),#, 'relative_sizes', 'shades', 'relative_shades', 'sizes', 'relative_positions'),
+                 # which object attributes
+                 # can be used
+                 min_max_sizes=((0.2, 0.25), (0.25, 0.3)),  # ranges of sizes of objects (small and large ones)
+                 agent_size=0.05,  # size of the agent
+                 epsilon_initial_pos=0.3,  # epsilon to sample initial positions
+                 screen_size=800,  # size of the visualization screen
+                 next_to_epsilon=0.3,  # define the area to qualify an object as 'next to' another.
+                 attribute_combinations=True,
+                 obj_size_update=0.04,
+                 render_mode=False
                  ):
+
+        self.params = get_env_params(max_nb_objects=max_nb_objects,
+                                     admissible_actions=admissible_actions,
+                                     admissible_attributes=admissible_attributes,
+                                     min_max_sizes=min_max_sizes,
+                                     agent_size=agent_size,
+                                     epsilon_initial_pos=epsilon_initial_pos,
+                                     screen_size=screen_size,
+                                     next_to_epsilon=next_to_epsilon,
+                                     attribute_combinations=attribute_combinations,
+                                     obj_size_update=obj_size_update,
+                                     render_mode=render_mode
+                                     )
+        self.adm_attributes = self.params['admissible_attributes']
+        self.adm_abs_attributes = [a for a in self.adm_attributes if 'relative' not in a]
+
+        self.attributes = self.params['attributes']
+        self.categories = self.params['categories']
+        self.screen_size = self.params['screen_size']
 
         self.viz_data_collection = viz_data_collection
         self.reward_screen = reward_screen
@@ -33,72 +69,73 @@ class PlayGroundNavigationV1(gym.Env):
         self.SP_feedback = False
         self.known_goals_update = False
         self.known_goals_descr = []
-        self.logits_concat = [0, 0, 0]
 
         self.circles = [[x * 3, 200, x * 4] for x in range(50)]
 
         self.random_init = random_init
-        self.epsilon = 1
-        self.n_timesteps = n_timesteps
-        self.human = human
-        self.render_mode = render
+        self.max_timesteps = max_timesteps
 
-        self.n_act = 3
-        self.nb_obj = N_OBJECTS_IN_SCENE
-        self.dim_obj = DIM_OBJ
-        self.inds_objs = [np.arange(n_inds_before_obj_inds + self.dim_obj * i_obj,
-                                    n_inds_before_obj_inds + self.dim_obj * (i_obj + 1)) for i_obj in
-                          range(self.nb_obj)]
-        self.n_half_obs = self.nb_obj * self.dim_obj + n_inds_before_obj_inds
-        self.inds_grasped_obj = np.array([])
-        self.n_obs = self.n_half_obs * 2
+        # Dimensions of action and observations spaces
+        self.dim_act = 3
+        self.max_nb_objects = self.params['max_nb_objects']
+        self.random_nb_obj = random_nb_obj
+        self.nb_obj = self.params['max_nb_objects']
+        self.dim_obj = self.params['dim_obj_features']
+        self.dim_body = self.params['dim_body_features']
+        self.inds_objs = [np.arange(self.dim_body  + self.dim_obj * i_obj, self.dim_body + self.dim_obj * (i_obj + 1))
+                          for i_obj in range(self.nb_obj)]
+        
+        self.half_dim_obs = self.max_nb_objects * self.dim_obj + self.dim_body
+        self.dim_obs = int(2 * self.half_dim_obs)
 
         # We define the spaces
-        self.action_space = spaces.Box(low=-np.ones(self.n_act),
-                                       high=np.ones(self.n_act),
+        self.action_space = spaces.Box(low=-np.ones(self.dim_act),
+                                       high=np.ones(self.dim_act),
                                        dtype=np.float32)
-
-        self.observation_space = spaces.Box(low=-np.ones(self.n_obs),
-                                            high=np.ones(self.n_obs),
+        self.observation_space = spaces.Box(low=-np.ones(self.dim_obs),
+                                            high=np.ones(self.dim_obs),
                                             dtype=np.float32)
 
-        # Maint agent
-        self.pos_step_size = 0.15
-        self.pos_init = [0., 0.]
-        self.pos_init_random_random = 0.6
+        # Agent parameters
+        self.agent_step_size = agent_step_size
+        self.agent_initial_pos = agent_initial_pos
+        self.agent_initial_pos_range = agent_initial_pos_range
 
+        # rendering
+        self.human = human
+        self.render_mode = render_mode
+        self.logits_concat = (0 for _ in range(self.nb_obj))
         if self.render_mode:
             pygame.init()
             if self.reward_screen:
-                self.viewer = pygame.display.set_mode((SCREEN_SIZE + 300, SCREEN_SIZE))
+                self.viewer = pygame.display.set_mode((self.screen_size + 300, self.screen_size))
             else:
-                self.viewer = pygame.display.set_mode((SCREEN_SIZE, SCREEN_SIZE))
+                self.viewer = pygame.display.set_mode((self.screen_size, self.screen_size))
             self.viewer_started = False
         self.background = None
 
         self.reset()
 
         # We set to None to rush error if reset not called
-        self.reward = None
         self.observation = None
         self.initial_observation = None
         self.done = None
 
-        self.info = dict(is_success=0)
+
 
     def change_n_objs(self, n_objs):
         self.nb_obj = n_objs
         self.inds_objs = [np.arange(n_inds_before_obj_inds + self.dim_obj * i_obj,
                                     n_inds_before_obj_inds + self.dim_obj * (i_obj + 1)) for i_obj in
                           range(self.nb_obj)]
-        self.n_half_obs = self.nb_obj * self.dim_obj + n_inds_before_obj_inds
-        self.n_obs = self.n_half_obs * 2
+        self.half_dim_obs = self.nb_obj * self.dim_obj + n_inds_before_obj_inds
+        self.dim_obs = self.half_dim_obs * 2
 
     def set_state(self, state):
 
-        assert state.size == self.n_half_obs, 'N_OBJECTS_IN_SCENE is not right'
+        assert state.size == self.half_dim_obs, 'N_OBJECTS_IN_SCENE is not right'
         current_state = state[:state.shape[0] // 2]
-        self.pos = current_state[:2]
+        self.agent_pos = current_state[:2]
         self.gripper_state = current_state[2]
 
         self.initial_observation = current_state - state[state.shape[0] // 2:]
@@ -132,162 +169,134 @@ class PlayGroundNavigationV1(gym.Env):
             obj.give_ref_to_obj_list(self.objects)
             obj.update_all_attributes()
 
+    def regularize_type_and_attribute(self, object):
+        if object['categories'] is None and object['types'] is not None:
+            for k in self.categories.keys():
+                if object['types'] in self.categories[k]:
+                    object['categories'] = k
+        elif object['categories'] is not None and object['types'] is None:
+            object['types'] = np.random.choice(self.categories[object['categories']])
+        elif object['categories'] is None and object['types'] is None:
+            object['categories'] = np.random.choice(list(self.categories.keys()))
+            object['types'] = np.random.choice(self.categories[object['categories']])
+        elif object['categories'] is not None and object['types'] is not None:
+            if object['types'] not in self.categories[object['categories']]:
+                object['types'] = np.random.choice(self.categories[object['categories']])
+        return object.copy()
+
+    def complete_and_check_objs(self, objects_decr):
+        objects_decr = [self.regularize_type_and_attribute(o) for o in objects_decr]
+        for o in objects_decr:
+            for k in o.keys():
+                if o[k] is None:
+                    o[k] = np.random.choice(self.attributes[k])
+        return objects_decr.copy()
+
+
     def reset_with_goal(self, goal_str):
         words = goal_str.split(' ')
         objs = []
 
         if words[0] == 'Grow':
-            obj = dict(type=None,
-                       category=None,
-                       color=None,
-                       size=None,
-                       shade=None)
-            if words[2] in thing_colors + thing_shades + thing_sizes and words[3] == 'thing':
-                obj['category'] = np.random.choice(['animal', 'plant'])
-                if words[2] in thing_colors:
-                    obj['color'] = words[2]
-                elif words[2] in thing_sizes:
-                    obj['size'] = words[2]
-                elif words[2] in thing_shades:
-                    obj['shade'] = words[2]
+            obj_to_be_grown = dict(zip(self.adm_abs_attributes, [None for _ in range(len(self.adm_abs_attributes))] ))
+            obj_supply = dict(zip(self.adm_abs_attributes, [None for _ in range(len(self.adm_abs_attributes))] ))
+
+            # first add the object that should be grown
+            for w in words[1:]:
+                for k in self.adm_abs_attributes:
+                    if w in self.attributes[k]:
+                        obj_to_be_grown[k] = w
+            if obj_to_be_grown['categories'] is None and obj_to_be_grown['types'] is None:
+                # if only attributes are proposed, sample a grownable object type
+                obj_to_be_grown['categories'] = np.random.choice(['animal', 'plant'])
+            objs.append(obj_to_be_grown.copy())
+
+            # now sample the supply
+            if obj_to_be_grown['categories'] in ['living_thing', 'plant'] or obj_to_be_grown['types'] in self.categories['plant']:
+                obj_supply.update(dict(types='water',
+                                       categories='supply'))
             else:
-                for w in words:
-                    if w in things:
-                        obj['type'] = w
-                    elif w in group_names:
-                        obj['category'] = w
-                    elif w in thing_colors:
-                        obj['color'] = w
-                    elif w in thing_sizes:
-                        obj['size'] = w
-                    elif w in thing_shades:
-                        obj['shade'] = w
-            objs.append(obj)
-            if obj['category'] in ['living_thing', 'plant'] or obj['type'] in plants:
-                obj = dict(type='water',
-                           category='supply',
-                           color=None,
-                           size=None,
-                           shade=None)
-            else:
-                obj = dict(type=None,
-                           category='supply',
-                           color='green',
-                           size=None,
-                           shade=None)
-            objs.append(obj.copy())
+                obj_supply.update(dict(categories='supply'))
+            objs.append(obj_supply.copy())
 
         else:
-            obj = dict(type=None,
-                       category=None,
-                       color=None,
-                       size=None,
-                       shade=None)
-            for w in words:
-                if w in things:
-                    obj['type'] = w
-                elif w in group_names:
-                    obj['category'] = w
-                elif w in thing_colors:
-                    obj['color'] = w
-                elif w in thing_sizes:
-                    obj['size'] = w
-                elif w in thing_shades:
-                    obj['shade'] = w
-            objs.append(obj)
+            obj = dict(zip(self.adm_abs_attributes, [None for _ in range(len(self.adm_abs_attributes))] ))
+            for w in words[1:]:
+                for k in self.adm_abs_attributes:
+                    if w in self.attributes[k]:
+                        obj[k] = w
+            objs.append(obj.copy())
 
         return self.reset_scene(objs)
 
     def reset(self):
+        if self.random_nb_obj:
+            self.nb_obj = np.random.randint(2, self.max_nb_objects)
+            self.half_dim_obs = self.nb_obj * self.dim_obj + self.dim_body
+            self.dim_obs = int(2 * self.half_dim_obs)
+
         self.first_action = False
-        self.logits_concat = [0, 0, 0]
+        self.logits_concat = (0 for _ in range(self.nb_obj))
         self.SP_feedback = False
         self.known_goals_update = False
         return self.reset_scene()
 
     def reset_scene(self, objects=None):
 
-        self.pos = self.pos_init
+        self.agent_pos = self.agent_initial_pos
 
         if self.random_init:
-            self.pos += np.random.uniform(-self.pos_init_random_random, self.pos_init_random_random, 2)
-            self.gripper_state = np.random.choice([-1, 1])  # self.arm_rest_state[3]
+            self.agent_pos += np.random.uniform(-self.agent_initial_pos_range, self.agent_initial_pos_range, 2)
+            self.gripper_state = np.random.choice([-1, 1])
         else:
             self.gripper_state = -1
 
-        self.objects, self.objects_ids, self.objects_types = self.sample_objects(objects)
-
-        self.object_grasped = False
-
-        # update attributes
-        for obj in self.objects:
-            obj.give_ref_to_obj_list(self.objects)
-            obj.update_all_attributes()
+        self.objects = self.sample_objects(objects)
 
         # Print objects
+        self.object_grasped = False
         for obj in self.objects:
-            self.object_grasped = obj.update_state(self.pos,
+            self.object_grasped = obj.update_state(self.agent_pos,
                                                    self.gripper_state > 0,
                                                    self.objects,
                                                    self.object_grasped,
-                                                   np.zeros([10]))
+                                                   np.zeros([self.dim_act]))
 
 
         # construct vector of observations
-        self.observation = np.zeros(self.n_obs)
-        self.observation[:self.n_half_obs] = self.observe()
-        self.initial_observation = self.observation[:self.n_half_obs].copy()
-        self.steps = 0
+        self.observation = np.zeros(self.dim_obs)
+        self.observation[:self.half_dim_obs] = self.observe()
+        self.initial_observation = self.observation[:self.half_dim_obs].copy()
+        self.env_step = 0
         self.done = False
         return self.observation.copy()
 
+    def get_pixel_coordinates(self, xpos, ypos):
+        return ((xpos + 1) / 2 * (self.params['screen_size'] * 2 / 3) + 1 / 6 * self.params['screen_size']).astype(np.int), \
+               ((-ypos + 1) / 2 * (self.params['screen_size'] * 2 / 3) + 1 / 6 * self.params['screen_size']).astype(np.int)
+
     def sample_objects(self, objects_to_add):
-        objects = []
-        objects_ids = []
-        objects_types = []
-        if objects_to_add is not None:
-            for object in objects_to_add:
-                if object['type'] is not None:
-                    type = object['type']
-                elif object['category'] is not None:
-                    type = np.random.choice(groups[group_names.index(object['category'])])
-                else:
-                    type = np.random.choice(things)
-                if object['size'] is not None:
-                    size = object['size']
-                else:
-                    size = np.random.choice(thing_sizes)
-                if object['color'] is not None:
-                    color = object['color']
-                else:
-                    color = np.random.choice(thing_colors)
-                if object['shade'] is not None:
-                    shade = object['shade']
-                else:
-                    shade = np.random.choice(thing_shades)
-                obj_id = get_obj_identifier(type, color, shade, size)
-                if obj_id not in objects_ids:
-                    objects.append(build_object(type, color, shade, size, len(objects), objects, self.render_mode))
-                    objects_ids.append(obj_id)
-                    objects_types.append(type)
+        object_descr = objects_to_add if objects_to_add is not None else []
+        while len(object_descr) < self.nb_obj:
+            object = dict()
+            for k in self.adm_abs_attributes:
+                object[k] = np.random.choice(self.attributes[k])
+            object_descr.append(object)
+        object_descr = self.complete_and_check_objs(object_descr)
+        objects_ids = [self.get_obj_identifier(o) for o in object_descr]
+        objects = generate_objects(object_descr, objects_ids, self.params)
+        return objects
 
-        while len(objects) < self.nb_obj:
-            type = np.random.choice(things)
-            color = np.random.choice(thing_colors)
-            shade = np.random.choice(thing_shades)
-            size = np.random.choice(thing_sizes)
-            obj_id = get_obj_identifier(type, color, shade, size)
-            if obj_id not in objects_ids:
-                objects.append(build_object(type, color, shade, size, len(objects), objects, self.render_mode))
-                objects_ids.append(obj_id)
-                objects_types.append(type)
-
-        return objects, objects_ids, objects_types
+    def get_obj_identifier(self, object):
+        id_str = ''
+        for k in sorted(list(object.keys())):
+            id_str += '{}:{} '.format(k, object[k])
+        return id_str
 
     def observe(self):
 
-        obj_features = np.array([obj.features for obj in self.objects]).flatten()
-        obs = np.concatenate([self.pos,  # size 2
+        obj_features = np.array([obj.get_features() for obj in self.objects]).flatten()
+        obs = np.concatenate([self.agent_pos,  # size 2
                               np.array([self.gripper_state]),
                               obj_features,
                               ])
@@ -308,12 +317,8 @@ class PlayGroundNavigationV1(gym.Env):
         if np.sum(action) != 0:
             self.first_action = True
 
-        # use fake actions so as to reuse objects from v0
-        fake_action = np.zeros([10])
-        fake_action[:3] = action[:3].copy()  # give gripper actions
-
-        # Update the arm position
-        self.pos = np.clip(self.pos + action[:2] * self.pos_step_size, -1.2, 1.2)
+        # Update the agent position
+        self.agent_pos = np.clip(self.agent_pos + action[:2] * self.agent_step_size, -1.2, 1.2)
 
         # Update the gripper state
         if self.human:
@@ -328,21 +333,18 @@ class PlayGroundNavigationV1(gym.Env):
             self.gripper_state = new_gripper
 
         for obj in self.objects:
-            self.object_grasped = obj.update_state(self.pos,
+            self.object_grasped = obj.update_state(self.agent_pos,
                                                    self.gripper_state > 0,
                                                    self.objects,
                                                    self.object_grasped,
-                                                   fake_action)
-
-        for obj in self.objects:
-            obj.update_all_attributes()
+                                                   action)
 
 
-        self.observation[:self.n_half_obs] = self.observe()
-        self.observation[self.n_half_obs:] = self.observation[:self.n_half_obs] - self.initial_observation
+        self.observation[:self.half_dim_obs] = self.observe()
+        self.observation[self.half_dim_obs:] = self.observation[:self.half_dim_obs] - self.initial_observation
 
-        self.steps += 1
-        if self.steps == self.n_timesteps:
+        self.env_step += 1
+        if self.env_step == self.max_timesteps:
             self.done = True
 
         return self.observation.copy(), 0, False, {}
@@ -366,10 +368,10 @@ class PlayGroundNavigationV1(gym.Env):
             goal_txt_surface = FONT.render(goal_str, True, pygame.Color('black'))
             self.viewer.blit(goal_txt_surface, (800 + 150 - goal_txt_surface.get_width() // 2, 50))
 
-            cross_icon = pygame.image.load(IMAGE_PATH + 'cross.png')
+            cross_icon = pygame.image.load(self.params['img_path'] + 'cross.png')
             cross_icon = pygame.transform.scale(cross_icon, (50, 50)).convert_alpha()
 
-            tick_icon = pygame.image.load(IMAGE_PATH + 'tick.png')
+            tick_icon = pygame.image.load(self.params['img_path'] + 'tick.png')
             tick_icon = pygame.transform.scale(tick_icon, (50, 50)).convert_alpha()
 
             if any(logit > 0.5 for logit in self.logits_concat):
@@ -391,13 +393,13 @@ class PlayGroundNavigationV1(gym.Env):
                 pygame.draw.rect(self.viewer, pygame.Color('darkred'), (860 + int(x * 160), 252.5 + 200 * i_obj, 3, 25))
 
         # GRIPPER
-        x, y = get_pixel_coordinates(self.pos[0], self.pos[1])
+        x, y = self.get_pixel_coordinates(self.agent_pos[0], self.agent_pos[1])
         # TODO don't load in rendering this is stupid
         size_gripper_pixels = 55
         size_gripper_closed_pixels = 45
-        gripper_icon = pygame.image.load(IMAGE_PATH + 'hand_open.png')
+        gripper_icon = pygame.image.load(self.params['img_path'] + 'hand_open.png')
         gripper_icon = pygame.transform.scale(gripper_icon, (size_gripper_pixels, size_gripper_pixels)).convert_alpha()
-        closed_gripper_icon = pygame.image.load(IMAGE_PATH + 'hand_closed.png')
+        closed_gripper_icon = pygame.image.load(self.params['img_path'] + 'hand_closed.png')
         closed_gripper_icon = pygame.transform.scale(closed_gripper_icon,
                                                      (size_gripper_closed_pixels, size_gripper_pixels)).convert_alpha()
         if self.gripper_state == 1:
@@ -413,7 +415,7 @@ class PlayGroundNavigationV1(gym.Env):
         if self.first_action == False:
             txt_surface = FONT.render(goal_str, True, pygame.Color('black'))
 
-            speech_bubble_icon = pygame.image.load(IMAGE_PATH + 'bubble.png')
+            speech_bubble_icon = pygame.image.load(self.params['img_path'] + 'bubble.png')
             speech_bubble_icon = pygame.transform.scale(speech_bubble_icon,
                                                         (txt_surface.get_width() + 50, 120)).convert_alpha()
             off_set_bubble = int(1.2 * size_gripper_pixels)
@@ -425,7 +427,7 @@ class PlayGroundNavigationV1(gym.Env):
         if self.viz_data_collection:
             # KNOWN GOALS
             known_goals_txt = FONT.render('Known Goals', True, pygame.Color('darkblue'))
-            known_goals_icon = pygame.image.load(IMAGE_PATH + 'known_goals_box.png')
+            known_goals_icon = pygame.image.load(self.params['img_path'] + 'known_goals_box.png')
             known_goals_icon = pygame.transform.scale(known_goals_icon,
                                                       (300, 35 + 25 * len(self.known_goals_descr))).convert_alpha()
             self.viewer.blit(known_goals_icon, (50, 50))
@@ -436,13 +438,13 @@ class PlayGroundNavigationV1(gym.Env):
 
             if self.SP_feedback == True:
                 # SOCIAL PEER
-                SP_head_icon = pygame.image.load(IMAGE_PATH + 'SP_head.png')
+                SP_head_icon = pygame.image.load(self.params['img_path'] + 'SP_head.png')
                 SP_head_icon = pygame.transform.scale(SP_head_icon, (80, 80)).convert_alpha()
                 SP_x = 50
                 SP_y = 700
                 self.viewer.blit(SP_head_icon, (SP_x, SP_y))
                 SP_txt_surface = FONT.render('You ' + 'g' + self.SP_goal_descr[1:], True, pygame.Color('black'))
-                SP_bubble_icon = pygame.image.load(IMAGE_PATH + 'SP_bubble.png')
+                SP_bubble_icon = pygame.image.load(self.params['img_path'] + 'SP_bubble.png')
                 SP_bubble_icon = pygame.transform.scale(SP_bubble_icon,
                                                         (SP_txt_surface.get_width() + 50, 80)).convert_alpha()
                 self.viewer.blit(SP_bubble_icon, (SP_x + 70, SP_y - 25))

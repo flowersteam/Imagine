@@ -1,344 +1,217 @@
-from src.playground_env.extract_from_state import *
-from src.playground_env.env_params import *
-from src.playground_env.descriptions import train_descriptions, test_descriptions, extra_descriptions
+from src.playground_env.env_params import get_env_params
+from src.playground_env.descriptions import generate_all_descriptions
 
+train_descriptions, test_descriptions, extra_descriptions = generate_all_descriptions(get_env_params())
 
+def get_move_descriptions(get_agent_position_attributes, current_state):
+    move_descriptions = []
+    position_attributes = get_agent_position_attributes(current_state)
+    for pos_att in position_attributes:
+        move_descriptions.append('Go ' + pos_att)
+    return move_descriptions.copy()
 
-def sample_descriptions_from_state(state, modes=MODES):
+def get_grasp_descriptions(get_grasped_ids, current_state, sort_attributes, obj_attributes, params, check_if_relative, combine_two):
+    obj_grasped = get_grasped_ids(current_state)
+    verb = 'Grasp'
+    grasp_descriptions = []
+    for i_obj in obj_grasped:
+        att = obj_attributes[i_obj]
+        adj_att, name_att = sort_attributes(att)
+        if params['attribute_combinations']:
+            adj_att += combine_two(adj_att, adj_att)
+        for adj in adj_att:
+            quantifier = 'any'  # 'the' if check_if_relative(adj) else 'a'
+            if not check_if_relative(adj):
+                for name in name_att:
+                    # grasp_descriptions.append('{} {} {} {}'.format(verb, quantifier, adj, name))
+                    grasp_descriptions.append('{} {} {}'.format(verb, adj, name))
+            grasp_descriptions.append('{} {} {} thing'.format(verb, quantifier, adj))
+        for name in name_att:
+            grasp_descriptions.append('{} any {}'.format(verb, name))
+            # grasp_descriptions.append('{} a {}'.format(verb, name))
 
-    descriptions = []
+    return grasp_descriptions.copy()
+
+def get_grow_descriptions(get_grown_ids, initial_state, current_state, params, obj_attributes, sort_attributes, combine_two, check_if_relative):
+    obj_grown = get_grown_ids(initial_state, current_state)
+    verb = 'Grow'
+    grow_descriptions = []
+    list_exluded = params['categories']['furniture'] + params['categories']['supply'] + ('furniture', 'supply')
+    for i_obj in obj_grown:
+        att = obj_attributes[i_obj]
+        adj_att, name_att = sort_attributes(att)
+        if params['attribute_combinations']:
+            adj_att += combine_two(adj_att, adj_att)
+        for adj in adj_att:
+            if adj not in list_exluded:
+                quantifier = 'any'  # 'the' if check_if_relative(adj) else 'a'
+                if not check_if_relative(adj):
+                    for name in name_att:
+                        # grow_descriptions.append('{} {} {} {}'.format(verb, quantifier, adj, name))
+                        grow_descriptions.append('{} {} {}'.format(verb, adj, name))
+                grow_descriptions.append('{} {} {} thing'.format(verb, quantifier, adj))
+        for name in name_att:
+            # grow_descriptions.append('{} a {}'.format(verb, name))
+            grow_descriptions.append('{} any {}'.format(verb, name))
+
+    return grow_descriptions.copy()
+
+def get_extra_grow_descriptions(get_supply_contact_ids, initial_state, current_state, params, obj_attributes, sort_attributes, combine_two, check_if_relative):
+    obj_grown = get_supply_contact_ids(current_state)
+    verb = 'Attempted grow'
+    grow_descriptions = []
+    list_exluded = params['categories']['living_thing'] + ('living_thing', 'animal', 'plant')
+    for i_obj in obj_grown:
+        att = obj_attributes[i_obj]
+        adj_att, name_att = sort_attributes(att)
+        if params['attribute_combinations']:
+            adj_att += combine_two(adj_att, adj_att)
+        for adj in adj_att:
+            if adj not in list_exluded:
+                quantifier = 'any'  # 'the' if check_if_relative(adj) else 'a'
+                if not check_if_relative(adj):
+                    for name in name_att:
+                        # grow_descriptions.append('{} {} {} {}'.format(verb, quantifier, adj, name))
+                        grow_descriptions.append('{} {} {}'.format(verb, adj, name))
+                grow_descriptions.append('{} {} {} thing'.format(verb, quantifier, adj))
+        for name in name_att:
+            # grow_descriptions.append('{} a {}'.format(verb, name))
+            grow_descriptions.append('{} any {}'.format(verb, name))
+
+    return grow_descriptions.copy()
+
+def sample_descriptions_from_state(state, params):
+
+    get_grasped_ids = params['extract_functions']['get_interactions']['get_grasped']
+    get_grown_ids = params['extract_functions']['get_interactions']['get_grown']
+    get_supply_contact = params['extract_functions']['get_interactions']['get_supply_contact']
+    get_attributes_functions=params['extract_functions']['get_attributes_functions']
+    admissible_attributes = params['admissible_attributes']
+    admissible_actions = params['admissible_actions']
+    get_obj_features = params['extract_functions']['get_obj_features']
+    count_objects = params['extract_functions']['count_objects']
+    get_agent_position_attributes = params['extract_functions']['get_agent_position_attributes']
+    check_if_relative = params['extract_functions']['check_if_relative']
+    combine_two = params['extract_functions']['combine_two']
+
 
     current_state = state[:len(state) // 2]
     initial_state = current_state - state[len(state) // 2:]
     assert len(current_state) == len(initial_state)
 
-    # extract attributes of objects
-    current_absolute_attributes, current_relative_attributes = get_attributes_from_state(current_state)
+    nb_objs = count_objects(current_state)
+    obj_features = [get_obj_features(initial_state, i_obj) for i_obj in range(nb_objs)]
 
-    if 'Gripper' in admissible_actions:
-        # descriptions about the gripper
-        agent_pos = current_state[:2]
-        if agent_pos[0] < -0.05:
-            descriptions.append('Go left')
-        elif agent_pos[0] > 0.05:
-            descriptions.append('Go right')
-        if agent_pos[1] < -0.05:
-            descriptions.append('Go bottom')
-        elif agent_pos[1] > 0.05:
-            descriptions.append('Go top')
-        if agent_pos[0] < - 0.25:
-            if agent_pos[1] < -0.25:
-                descriptions.append('Go bottom left')
-            elif agent_pos[1] > 0.25:
-                descriptions.append('Go top left')
-        elif agent_pos[0] > 0.25:
-            if agent_pos[1] < -0.25:
-                descriptions.append('Go bottom right')
-            elif agent_pos[1] > 0.25:
-                descriptions.append('Go top right')
-        else:
-            if agent_pos[1] < 0.25 and agent_pos[1] > -0.25 and agent_pos[0] < 0.25 and agent_pos[0] > -0.25:
-                descriptions.append('Go center')
+    # extract object attributes
+    obj_attributes = []
+    for i_obj in range(nb_objs):
+        obj_att = []
+        for k in admissible_attributes:
+            obj_att += get_attributes_functions[k](obj_features, i_obj)
+        obj_attributes.append(obj_att)
 
-    # deal with Grasp
-    # get grasped objects
+    def sort_attributes(attributes):
+        adj_attributes = []
+        name_attributes = []
+        for att in attributes:
+            if att in tuple(params['categories'].keys()) + params['attributes']['types']:
+                name_attributes.append(att)
+            else:
+                adj_attributes.append(att)
+        return adj_attributes, name_attributes
+
+    descriptions = []
+
+    # Add Move descriptions
+    if 'Move' in admissible_actions:
+        descriptions += get_move_descriptions(get_agent_position_attributes, current_state)
+
+    # Add Grasp descriptions
     if 'Grasp' in admissible_actions:
-        obj_id_grasped_current = get_grasped_obj_ids(current_state)
-        verb = 'Grasp'
-        for obj_id in obj_id_grasped_current:
-            if 1 in modes:
-                for attr in current_absolute_attributes[obj_id] + current_relative_attributes[obj_id]:
-                    if attr in thing_sizes + thing_shades + thing_colors:
-                        descriptions.append('{} any {} thing'.format(verb, attr))
-                    else:
-                        descriptions.append('{} any {}'.format(verb, attr))
+        descriptions += get_grasp_descriptions(get_grasped_ids, current_state, sort_attributes, obj_attributes, params, check_if_relative, combine_two)
 
-            # add combination of attribute and object type
-            if 2 in modes:
-                # add combination of attribute and object type
-                object_types = []
-                for attr in current_absolute_attributes[obj_id]:
-                    if attr in things + group_names:
-                        object_types.append(attr)
-                for obj_type in object_types:
-                    for attr in current_absolute_attributes[obj_id]:
-                        if attr not in all_non_attributes:
-                            descriptions.append('{} {} {}'.format(verb, attr, obj_type))
-
-    # get grasped objects
+    # Add Grow descriptions
     if 'Grow' in admissible_actions:
-        obj_grown = get_grown_obj_ids(initial_state, current_state)
-        verb = 'Grow'
-        for obj_id in obj_grown:
-            if 1 in modes:
-                for attr in current_absolute_attributes[obj_id] + current_relative_attributes[obj_id]:
-                    if attr in thing_sizes + thing_shades + thing_colors:
-                        descriptions.append('{} any {} thing'.format(verb, attr))
-                    else:
-                        descriptions.append('{} any {}'.format(verb, attr))
+        descriptions += get_grow_descriptions(get_grown_ids, initial_state, current_state, params, obj_attributes, sort_attributes, combine_two, check_if_relative)
 
-            # add combination of attribute and object type
-            if 2 in modes:
-                # add combination of attribute and object type
-                object_types = []
-                for attr in current_absolute_attributes[obj_id]:
-                    if attr in things + group_names:
-                        object_types.append(attr)
-                for obj_type in object_types:
-                    for attr in current_absolute_attributes[obj_id]:
-                        if attr not in all_non_attributes:
-                            descriptions.append('{} {} {}'.format(verb, attr, obj_type))
-
-    # deal with furniture stuff
-    if 'Grow' in admissible_actions:
-        obj_on_supply = get_obj_ids_on_supply(initial_state, current_state)
-        verb = 'Attempt grow'
-        for obj_id in obj_on_supply:
-            if 1 in modes:
-                for attr in current_absolute_attributes[obj_id] + current_relative_attributes[obj_id]:
-                    if attr in plants + furnitures + ['plant', 'furniture']:
-                        descriptions.append('{} any {}'.format(verb, attr))
-
-            # add combination of attribute and object type
-            if 2 in modes:
-                # add combination of attribute and object type
-                object_types = []
-                for attr in current_absolute_attributes[obj_id]:
-                    if attr in things + group_names:
-                        object_types.append(attr)
-                for obj_type in object_types:
-                    for attr in current_absolute_attributes[obj_id]:
-                        if attr not in all_non_attributes:
-                            if obj_type in plants + furnitures + ['plant', 'furniture']:
-                                descriptions.append('{} {} {}'.format(verb, attr, obj_type))
-
+        descriptions += get_extra_grow_descriptions(get_supply_contact, initial_state, current_state, params, obj_attributes, sort_attributes, combine_two,
+                                                         check_if_relative)
     train_descr = []
     test_descr = []
     extra_descr = []
     for descr in descriptions:
         if descr in train_descriptions:
             train_descr.append(descr)
-        if descr in test_descriptions:
+        elif descr in test_descriptions:
             test_descr.append(descr)
-        if descr in extra_descriptions:
+        elif descr in extra_descriptions:
             extra_descr.append(descr)
-    return train_descr.copy(), test_descr.copy(), extra_descr.copy()
+        else:
+            print(descr)
+            raise ValueError
 
-def get_reward_from_state(state, goal):
+    return train_descr.copy(), test_descr.copy(), extra_descriptions.copy()
+
+def get_reward_from_state(state, goal, params):
+
+    get_grasped_ids = params['extract_functions']['get_interactions']['get_grasped']
+    get_grown_ids = params['extract_functions']['get_interactions']['get_grown']
+    get_attributes_functions = params['extract_functions']['get_attributes_functions']
+    admissible_attributes = params['admissible_attributes']
+    admissible_actions = params['admissible_actions']
+    get_obj_features = params['extract_functions']['get_obj_features']
+    count_objects = params['extract_functions']['count_objects']
+    get_agent_position_attributes = params['extract_functions']['get_agent_position_attributes']
+
+    check_if_relative = params['extract_functions']['check_if_relative']
+    combine_two = params['extract_functions']['combine_two']
+
     current_state = state[:len(state) // 2]
     initial_state = current_state - state[len(state) // 2:]
     assert len(current_state) == len(initial_state)
 
-    # extract attributes of objects
-    current_absolute_attributes, current_relative_attributes = get_attributes_from_state(current_state)
+    nb_objs = count_objects(current_state)
+    obj_features = [get_obj_features(initial_state, i_obj) for i_obj in range(nb_objs)]
+
+    # extract object attributes
+    obj_attributes = []
+    for i_obj in range(nb_objs):
+        obj_att = []
+        for k in admissible_attributes:
+            obj_att += get_attributes_functions[k](obj_features, i_obj)
+        obj_attributes.append(obj_att)
+
+    def sort_attributes(attributes):
+        adj_attributes = []
+        name_attributes = []
+        for att in attributes:
+            if att in tuple(params['categories'].keys()) + params['attributes']['types']:
+                name_attributes.append(att)
+            else:
+                adj_attributes.append(att)
+        return adj_attributes, name_attributes
+
 
     words = goal.split(' ')
     reward = False
 
-    # Deal with gripper goals
     if words[0] == 'Go':
-        # descriptions about the gripper
-        agent_pos = current_state[:2]
-        if words[1] == 'top':
-            if len(words) > 2:
-                if agent_pos[1] > 0.25:
-                    if agent_pos[0] < -0.25 and words[2] == 'left':
-                        return True
-                    elif agent_pos[0] > 0.25 and words[2] == 'right':
-                        return True
-                    else:
-                        return False
-                else:
-                    return False
-            elif agent_pos[1] > 0.05:
-                return True
-            else:
-                return False
-        elif words[1] == 'bottom':
-            if len(words) > 2:
-                if agent_pos[1] < -0.25:
-                    if agent_pos[0] < -0.25 and words[2] == 'left':
-                        return True
-                    elif agent_pos[0] > 0.25 and words[2] == 'right':
-                        return True
-                    else:
-                        return False
-                else:
-                    return False
-            elif agent_pos[1] < -0.05:
-                return True
-            else:
-                return False
-        elif words[1] == 'left':
-            if len(words) > 2:
-                if agent_pos[0] < -0.25:
-                    if agent_pos[1] < -0.25 and words[2] == 'bottom':
-                        return True
-                    elif agent_pos[1] > 0.25 and words[2] == 'top':
-                        return True
-                    else:
-                        return False
-                else:
-                    return False
-            elif agent_pos[0] < -0.05:
-                return True
-            else:
-                return False
-        elif words[1] == 'right':
-            if len(words) > 2:
-                if agent_pos[0] > 0.25:
-                    if agent_pos[1] < -0.25 and words[2] == 'bottom':
-                        return True
-                    elif agent_pos[1] > 0.25 and words[2] == 'top':
-                        return True
-                    else:
-                        return False
-                else:
-                    return False
-            elif agent_pos[0] > 0.05:
-                return True
-            else:
-                return False
-        elif words[1] == 'center':
-            if agent_pos[1] < 0.25 and agent_pos[1] > -0.25 and agent_pos[0] < 0.25 and agent_pos[0] > -0.25:
-                return True
-            else:
-                return False
+        go_descr = get_move_descriptions(get_agent_position_attributes, current_state)
+        if goal in go_descr:
+            reward = True
 
-
-    # Deal with grasped
     if words[0] == 'Grasp':
-        # get grasped objects
-        obj_id_grasped_current = get_grasped_obj_ids(current_state)
-        # check whether the goal refers to any of the grasped objects
-        for id in obj_id_grasped_current:
-            # in that case only the attribute matters
-            if words[1] == 'any':
-                if words[2] in current_absolute_attributes[id] + current_relative_attributes[id]:
-                        return True
-            # in other cases, check whether the last word is an object type
-            elif words[2] in current_absolute_attributes[id] and (words[2] in things or words[2] in group_names):
-                # check that the attributes corresponds to that object
-                if words[1] in current_absolute_attributes[id]:
-                    return True
+        grasp_descr = get_grasp_descriptions(get_grasped_ids, current_state, sort_attributes, obj_attributes, params, check_if_relative, combine_two)
+        if goal in grasp_descr:
+            reward = True
 
-    # Deal with grow
+    # Add Grow descriptions
     if words[0] == 'Grow':
-        # get grasped objects
-        obj_id_grown = get_grown_obj_ids(initial_state, current_state)
-        # check whether the goal refers to any of the grasped objects
-        for id in obj_id_grown:
-            # in that case only the attribute matters
-            if words[1] == 'any':
-                if words[2] in current_absolute_attributes[id] + current_relative_attributes[id]:
-                        return True
-            # in other cases, check whether the last word is an object type
-            elif words[2] in current_absolute_attributes[id] and (words[2] in things or words[2] in group_names):
-                # check that the attributes corresponds to that object
-                if words[1] in current_absolute_attributes[id]:
-                    return True
+        grow_descr = get_grow_descriptions(get_grown_ids, initial_state, current_state, params, obj_attributes, sort_attributes, combine_two, check_if_relative)
+        if goal in grow_descr:
+            reward = True
 
     return reward
-
-
-
-
-
-def supply_on_furniture(state, goal):
-    current_state = state[:len(state) // 2]
-    initial_state = current_state - state[len(state) // 2:]
-    assert len(current_state) == len(initial_state)
-
-    # extract attributes of objects
-    initial_absolute_attributes, initial_relative_attributes = get_attributes_from_state(initial_state)
-    current_absolute_attributes, current_relative_attributes = get_attributes_from_state(current_state)
-
-    words = goal.split(' ')
-    reward = False
-
-
-    # Deal with grow
-    if words[0] == 'Grow':
-        # get grasped objects
-        obj_id_water = get_obj_ids_on_water(initial_state, current_state).tolist()
-        obj_id_food = get_obj_ids_on_food(initial_state, current_state).tolist()
-        # check whether the goal refers to any of the grasped objects
-        for id in obj_id_water + obj_id_food:
-            # in that case only the attribute matters
-            if words[1] == 'any':
-                if words[2] in current_absolute_attributes[id] + current_relative_attributes[id]:
-                        return True
-            # in other cases, check whether the last word is an object type
-            elif words[2] in current_absolute_attributes[id] and (words[2] in things or words[2] in group_names):
-                # check that the attributes corresponds to that object
-                if words[1] in current_absolute_attributes[id]:
-                    return True
-
-    return reward
-
-def food_on_furniture(state, goal):
-    current_state = state[:len(state) // 2]
-    initial_state = current_state - state[len(state) // 2:]
-    assert len(current_state) == len(initial_state)
-
-    # extract attributes of objects
-    initial_absolute_attributes, initial_relative_attributes = get_attributes_from_state(initial_state)
-    current_absolute_attributes, current_relative_attributes = get_attributes_from_state(current_state)
-
-    words = goal.split(' ')
-    reward = False
-
-
-    # Deal with grow
-    if words[0] == 'Grow':
-        # get grasped objects
-        obj_id_food = get_obj_ids_on_food(initial_state, current_state).tolist()
-        # check whether the goal refers to any of the grasped objects
-        for id in obj_id_food:
-            # in that case only the attribute matters
-            if words[1] == 'any':
-                if words[2] in current_absolute_attributes[id] + current_relative_attributes[id]:
-                        return True
-            # in other cases, check whether the last word is an object type
-            elif words[2] in current_absolute_attributes[id] and (words[2] in things or words[2] in group_names):
-                # check that the attributes corresponds to that object
-                if words[1] in current_absolute_attributes[id]:
-                    return True
-
-    return reward
-
-
-def water_on_furniture(state, goal):
-    current_state = state[:len(state) // 2]
-    initial_state = current_state - state[len(state) // 2:]
-    assert len(current_state) == len(initial_state)
-
-    # extract attributes of objects
-    initial_absolute_attributes, initial_relative_attributes = get_attributes_from_state(initial_state)
-    current_absolute_attributes, current_relative_attributes = get_attributes_from_state(current_state)
-
-    words = goal.split(' ')
-    reward = False
-
-
-    # Deal with grow
-    if words[0] == 'Grow':
-        # get grasped objects
-        obj_id_water = get_obj_ids_on_water(initial_state, current_state).tolist()
-        # check whether the goal refers to any of the grasped objects
-        for id in obj_id_water:
-            # in that case only the attribute matters
-            if words[1] == 'any':
-                if words[2] in current_absolute_attributes[id] + current_relative_attributes[id]:
-                        return True
-            # in other cases, check whether the last word is an object type
-            elif words[2] in current_absolute_attributes[id] and (words[2] in things or words[2] in group_names):
-                # check that the attributes corresponds to that object
-                if words[1] in current_absolute_attributes[id]:
-                    return True
-
-    return reward
-
 
 
 

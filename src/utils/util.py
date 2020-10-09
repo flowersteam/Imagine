@@ -2,8 +2,10 @@ import os
 import subprocess
 import sys
 import importlib
+import json
 import inspect
 import functools
+from copy import deepcopy
 from subprocess import CalledProcessError
 
 import tensorflow as tf
@@ -97,6 +99,25 @@ def get_stat_func(line='mean', err='std'):
         raise NotImplementedError
 
     return line_f, err_minus, err_plus
+
+def is_jsonable(x):
+    try:
+        json.dumps(x)
+        return True
+    except:
+        return False
+
+def clean_dict_for_json(a_dict):
+    if is_jsonable(a_dict):
+        return deepcopy(a_dict)
+    else:
+        if isinstance(a_dict, dict):
+            new_dict = dict()
+            for k in a_dict.keys():
+                new_dict[k] = clean_dict_for_json(a_dict[k])
+        else:
+            return None
+        return new_dict
 
 
 def make_session(num_cpu=None, make_default=False, graph=None):
