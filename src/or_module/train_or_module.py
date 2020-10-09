@@ -27,7 +27,6 @@ y_train = np.concatenate([y_train_pos, y_train_neg])
 x_train = np.concatenate([x_train_pos, x_train_neg], axis=0)
 assert (y_train == 0).sum() == n_points // 2
 
-
 # balanced valid set
 x_valid = np.random.uniform(0, 1, [n_points, n_objs])
 y_valid = (x_valid > 0.5).astype(np.int).max(axis=1)
@@ -50,7 +49,10 @@ class OrNet(nn.Module):
     def forward(self, x):
         x = F.tanh(self.fc1(x))
         x = F.tanh(self.fc2(x))
-        return torch.sigmoid(self.fc3(x))
+        x = torch.sigmoid(self.fc3(x))
+        x = 0.98 * x + 0.01
+        return x
+
 
 class MyAccumulatedAccuracyMetric():
     """
@@ -76,6 +78,7 @@ class MyAccumulatedAccuracyMetric():
     def name(self):
         return 'Rel Dist Accuracy'
 
+
 class OrDataset(Dataset):
     def __init__(self, x, y, split):
         self.split = split
@@ -91,6 +94,7 @@ class OrDataset(Dataset):
 
     def __len__(self):
         return self.x.shape[0]
+
 
 def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, metrics):
     for metric in metrics:
@@ -112,7 +116,7 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
         optimizer.step()
 
         for metric in metrics:
-            metric(outputs,  y.reshape(-1, 1).float())
+            metric(outputs, y.reshape(-1, 1).float())
 
         if (batch_idx + 1) % log_interval == 0:
             message = 'Train: [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
@@ -146,9 +150,7 @@ def valid_epoch(val_loader, model, loss_fn, cuda, metrics):
     return val_loss, metrics
 
 
-
-
-if __name__ =="__main__":
+if __name__ == "__main__":
     train_set = OrDataset(x_train, y_train, split='train')
     valid_set = OrDataset(x_valid, y_valid, split='valid')
     kwargs = {'num_workers': 1, 'pin_memory': True} if cuda else {}
@@ -164,7 +166,8 @@ if __name__ =="__main__":
     for epoch in range(n_epochs):
 
         # Train stage
-        train_loss, metrics = train_epoch(train_loader, model, loss_fn, optimizer, cuda, 200, [MyAccumulatedAccuracyMetric()])
+        train_loss, metrics = train_epoch(train_loader, model, loss_fn, optimizer, cuda, 200,
+                                          [MyAccumulatedAccuracyMetric()])
 
         scheduler.step()
         message = 'Epoch: {}/{}. Train set: Average loss: {:.4f}'.format(epoch + 1, n_epochs, train_loss)
@@ -197,13 +200,10 @@ if __name__ =="__main__":
                      fc3_weight=model.fc3.weight.data.numpy(),
                      fc3_bias=model.fc3.bias.data.numpy(),
                      description='fc1:[n_obj, 16]->tanh->fc2:[16, 16]->tanh->fc3:[16, 1]-> sigmoid',
-                     layers = [[n_objs, 16], [16, 16], [16, 1]],
-                     activations = ['tanh', 'tanh', 'sigmoid']
+                     layers=[[n_objs, 16], [16, 16], [16, 1]],
+                     activations=['tanh', 'tanh', 'sigmoid']
                      )
 
     with open(os.path.dirname(os.path.realpath(__file__)) + '/or_params_{}objs.pk'.format(n_objs), 'wb') as f:
         pickle.dump(or_params, f)
     stop = 1
-
-
-
