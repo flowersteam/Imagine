@@ -150,7 +150,7 @@ class Thing:
                 obj._update_attribute('relative_shades')
 
     def _update_position(self, new_position):
-        clipped_position = np.clip(new_position, -1, 1)
+        clipped_position = np.clip(new_position, -1.2, 1.2)
         self.position = clipped_position.copy()
         self._update_attribute('positions')
         if self.scene_objects:
