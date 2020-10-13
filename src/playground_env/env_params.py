@@ -63,7 +63,7 @@ def get_env_params(max_nb_objects=3,
     types = ()
     for k_c in categories.keys():
         types += categories[k_c]
-    types = tuple(set(types)) # filters doubles, when some categories include others.
+    types = tuple(sorted(list(set(types)))) # filters doubles, when some categories include others.
     nb_types = len(types)
 
     # List attributes
