@@ -13,9 +13,10 @@ from src.playground_env.reward_function import get_reward_from_state
 from src.playground_env.descriptions import generate_all_descriptions
 
 PATH = '../../../pretrained_weights/'
-EPOCH = 0
+EPOCH = '160'
 POLICY_FILE = PATH + 'policy_checkpoints/policy_{}.pkl'.format(EPOCH)
 PARAMS_FILE = PATH + 'params.json'
+
 
 def main(policy_file, seed, n_test_rollouts, render):
     set_global_seeds(seed)
@@ -41,7 +42,8 @@ def main(policy_file, seed, n_test_rollouts, render):
                                                     goal_invention=params['conditions']['goal_invention'],
                                                     reward_checkpoint=params['conditions']['reward_checkpoint'],
                                                     rl_positive_ratio=params['conditions']['rl_positive_ratio'],
-                                                    p_partner_availability=params['conditions']['p_social_partner_availability'],
+                                                    p_partner_availability=params['conditions'][
+                                                        'p_social_partner_availability'],
                                                     imagination_method=params['conditions']['imagination_method'],
                                                     git_commit='')
 
@@ -81,11 +83,14 @@ def main(policy_file, seed, n_test_rollouts, render):
     # Run evaluation.
     evaluation_worker.clear_history()
 
-    _, test_descriptions, _ = generate_all_descriptions(env.unwrapped.params)
 
-    np.random.shuffle(test_descriptions)
+    env_params = evaluation_worker.env.unwrapped.params
+    train_descriptions, test_descriptions, _ = generate_all_descriptions(env_params)
+    train_descriptions = list(train_descriptions)
+    np.random.shuffle(list(test_descriptions))
+    np.random.shuffle(train_descriptions)
     successes_test_descr = []
-    for d in test_descriptions:
+    for d in train_descriptions:
         successes_test_descr.append([])
         print(d)
         for i in range(n_test_rollouts):
@@ -97,19 +102,18 @@ def main(policy_file, seed, n_test_rollouts, render):
                                                      goals_str=goal_str,
                                                      goals_encodings=goal_encoding,
                                                      goals_ids=goal_id)
-            out = get_reward_from_state(ep[0]['obs'][-1], goal_str[0])
+            out = get_reward_from_state(ep[0]['obs'][-1], goal_str[0], env_params)
             successes_test_descr[-1].append(out == 1)
         print('Success rate {}: {}'.format(d, np.mean(successes_test_descr[-1])))
     print('Global success rate: {}'.format(np.mean(successes_test_descr)))
-
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     add = parser.add_argument
     add('--policy_file', type=str, default=POLICY_FILE)
-    add('--seed', type=int, default=int(np.random.randint(1e6)))
-    add('--n_test_rollouts', type=int, default=1)
-    add('--render', type=int, default=1)
+    add('--seed', type=int, default=0)  # int(np.random.randint(1e6)))
+    add('--n_test_rollouts', type=int, default=20)
+    add('--render', type=int, default=0)
     kwargs = vars(parser.parse_args())
     main(**kwargs)

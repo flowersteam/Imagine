@@ -8,14 +8,13 @@ import functools
 from copy import deepcopy
 from subprocess import CalledProcessError
 
-import tensorflow as tf
+import torch
 import numpy as np
 from mpi4py import MPI
 
-from src.utils import tf_util as U
 from src.utils.mpi_util import mpi_moments
 import random
-import multiprocessing
+
 
 def get_time_tracker():
     class TimeTracker:
@@ -120,21 +119,6 @@ def clean_dict_for_json(a_dict):
         return new_dict
 
 
-def make_session(num_cpu=None, make_default=False, graph=None):
-    """Returns a session that will use <num_cpu> CPU's only"""
-    if num_cpu is None:
-        num_cpu = int(os.getenv('RCALL_NUM_CPU', multiprocessing.cpu_count()))
-    tf_config = tf.ConfigProto(
-        inter_op_parallelism_threads=num_cpu,
-        intra_op_parallelism_threads=num_cpu)
-    if make_default:
-        return tf.InteractiveSession(config=tf_config, graph=graph)
-    else:
-        return tf.Session(config=tf_config, graph=graph)
-
-def single_threaded_session():
-    """Returns a session which will only use a single CPU"""
-    return make_session(num_cpu=1)
 
 def fork(num_cpu):
     # Fork for multi-CPU MPI implementation.
@@ -148,8 +132,7 @@ def fork(num_cpu):
 
         if whoami == 'parent':
             sys.exit(0)
-        import src.utils.tf_util as U
-        U.single_threaded_session().__enter__()
+
     rank = MPI.COMM_WORLD.Get_rank()
     return rank
 
@@ -207,12 +190,7 @@ def find_save_path(dir, trial_id):
     return save_dir
 
 def set_global_seeds(i):
-    try:
-        import tensorflow as tf
-    except ImportError:
-        pass
-    else:
-        tf.set_random_seed(i)
+    torch.manual_seed(i)
     np.random.seed(i)
     random.seed(i)
 
@@ -225,11 +203,6 @@ def import_function(spec):
     return fn
 
 
-def flatten_grads(var_list, grads):
-    """Flattens a variables and their gradients.
-    """
-    return tf.concat([tf.reshape(grad, [U.numel(v)])
-                      for (v, grad) in zip(var_list, grads)], 0)
 
 def var_shape(x):
     out = x.get_shape().as_list()
@@ -242,25 +215,6 @@ def numel(x):
 
 def intprod(x):
     return int(np.prod(x))
-
-def nn(input, layers_sizes, use_bias=True, reuse=None, flatten=False, name=""):
-    """Creates a simple neural network
-    """
-    for i, size in enumerate(layers_sizes):
-        activation = tf.nn.relu if i < len(layers_sizes) - 1 else None
-        input = tf.layers.dense(inputs=input,
-                                units=size,
-                                kernel_initializer=tf.contrib.layers.variance_scaling_initializer(uniform=True, factor=2.0),
-                                reuse=reuse,
-                                name=name + '_' + str(i),
-                                use_bias=use_bias)
-        if activation:
-            input = activation(input)
-    if flatten:
-        assert layers_sizes[-1] == 1
-        input = tf.reshape(input, [-1])
-    return input
-
 
 def install_mpi_excepthook():
     import sys
@@ -307,11 +261,3 @@ def transitions_in_episode_batch(episode_batch):
     shape = episode_batch['u'].shape
     return shape[0] * shape[1]
 
-
-def reshape_for_broadcasting(source, target):
-    """Reshapes a tensor (source) to have the correct shape and dtype of the target
-    before broadcasting it with MPI.
-    """
-    dim = len(target.get_shape())
-    shape = ([1] * (dim - 1)) + [-1]
-    return tf.reshape(tf.cast(source, target.dtype), shape)
