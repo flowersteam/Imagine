@@ -114,6 +114,6 @@ if __name__ == '__main__':
     add('--policy_file', type=str, default=POLICY_FILE)
     add('--seed', type=int, default=0)  # int(np.random.randint(1e6)))
     add('--n_test_rollouts', type=int, default=20)
-    add('--render', type=int, default=0)
+    add('--render', type=int, default=1)
     kwargs = vars(parser.parse_args())
     main(**kwargs)
