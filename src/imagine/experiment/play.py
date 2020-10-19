@@ -90,7 +90,7 @@ def main(policy_file, seed, n_test_rollouts, render):
     np.random.shuffle(list(test_descriptions))
     np.random.shuffle(train_descriptions)
     successes_test_descr = []
-    for d in train_descriptions:
+    for d in test_descriptions:
         successes_test_descr.append([])
         print(d)
         for i in range(n_test_rollouts):
