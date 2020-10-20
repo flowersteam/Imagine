@@ -14,8 +14,6 @@ from src.playground_env.descriptions import generate_all_descriptions
 
 
 def get_params_for_notebook(path):
-    EPOCH = '160'
-    POLICY_FILE = path + 'policy_checkpoints/policy_{}.pkl'.format(EPOCH)
     PARAMS_FILE = path + 'params.json'
     with open(PARAMS_FILE) as json_file:
         params = json.load(json_file)
@@ -41,3 +39,33 @@ def get_params_for_notebook(path):
                                                     imagination_method=params['conditions']['imagination_method'],
                                                     git_commit='')
     return params
+
+
+def get_modules_for_notebook(path, params):
+    EPOCH = '160'
+    POLICY_FILE = path + 'policy_checkpoints/policy_{}.pkl'.format(EPOCH)
+    policy_language_model, reward_language_model = config.get_language_models(params)
+
+    onehot_encoder = config.get_one_hot_encoder(params['all_descriptions'])
+    # Define the goal sampler for training
+    goal_sampler = GoalSampler(policy_language_model=policy_language_model,
+                               reward_language_model=reward_language_model,
+                               goal_dim=policy_language_model.goal_dim,
+                               one_hot_encoder=onehot_encoder,
+                               params=params)
+
+    reward_function = config.get_reward_function(goal_sampler, params)
+    if params['conditions']['reward_function'] == 'learned_lstm':
+        reward_function.restore_from_checkpoint(path + 'reward_checkpoints/reward_func_checkpoint_{}'.format(EPOCH))
+    policy_language_model.set_reward_function(reward_function)
+    if reward_language_model is not None:
+        reward_language_model.set_reward_function(reward_function)
+    goal_sampler.update_discovered_goals(params['all_descriptions'], episode_count=0, epoch=0)
+
+    # Define learning algorithm
+    policy = config.configure_learning_algo(reward_function=reward_function,
+                                            goal_sampler=goal_sampler,
+                                            params=params)
+
+    policy.load_params(POLICY_FILE)
+    return policy_language_model, reward_language_model, policy, reward_function, goal_sampler

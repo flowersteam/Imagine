@@ -63,6 +63,7 @@ class PlayGroundNavigationV1(gym.Env):
         self.screen_size = self.params['screen_size']
 
         self.viz_data_collection = viz_data_collection
+        self.show_imagination_bubble = False
         self.reward_screen = reward_screen
         self.first_action = False
         self.SP_feedback = False
@@ -364,17 +365,18 @@ class PlayGroundNavigationV1(gym.Env):
             self.viewer.blit(gripper_icon, (left, top))
 
         # IMAGINATION BUBBLE
-        # if self.first_action == False:
-        #     txt_surface = FONT.render(goal_str, True, pygame.Color('black'))
-        #
-        #     speech_bubble_icon = pygame.image.load(self.params['img_path'] + 'bubble.png')
-        #     speech_bubble_icon = pygame.transform.scale(speech_bubble_icon,
-        #                                                 (txt_surface.get_width() + 50, 120)).convert_alpha()
-        #     off_set_bubble = int(1.2 * size_gripper_pixels)
-        #     bubble_x = x - off_set_bubble // 2
-        #     bubble_y = y - 2 * off_set_bubble
-        #     self.viewer.blit(speech_bubble_icon, (bubble_x, bubble_y))
-        #     self.viewer.blit(txt_surface, (bubble_x + 25, bubble_y + 20))
+        if self.show_imagination_bubble:
+            if self.first_action == False:
+                txt_surface = FONT.render(goal_str, True, pygame.Color('black'))
+
+                speech_bubble_icon = pygame.image.load(self.params['img_path'] + 'bubble.png')
+                speech_bubble_icon = pygame.transform.scale(speech_bubble_icon,
+                                                            (txt_surface.get_width() + 50, 120)).convert_alpha()
+                off_set_bubble = int(1.2 * size_gripper_pixels)
+                bubble_x = x - off_set_bubble // 2
+                bubble_y = y - 2 * off_set_bubble
+                self.viewer.blit(speech_bubble_icon, (bubble_x, bubble_y))
+                self.viewer.blit(txt_surface, (bubble_x + 25, bubble_y + 20))
 
         if self.viz_data_collection:
             # KNOWN GOALS
