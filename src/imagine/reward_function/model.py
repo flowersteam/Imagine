@@ -169,3 +169,33 @@ class RewardFunctionModel(torch.nn.Module):
                 print(named_param[0])
                 filtered_params.append(param)
         return filtered_params
+
+    def compute_logits_before_or(self, s, h_lstm):
+        h_cast = self.sigmoid(self.fc_cast(h_lstm))
+        # extract inputs for each object (and their delta)
+        object_features = []
+        for i in range(self.n_obj):
+            obj_features = torch.cat(tensors=(s[:, self.objs_indices[i][0]: self.objs_indices[i][-1] + 1],
+                                              s[:, self.objs_indices[i][0] + self.half_o: self.objs_indices[i][
+                                                                                              -1] + 1 + self.half_o]),
+                                     dim=1)
+            object_features.append(obj_features)
+        # extract body inputs and its delta
+        state_body = torch.cat(tensors=(s[:, :self.objs_indices[0][0]],
+                                        s[:, self.half_o: self.half_o + self.objs_indices[0][0]]), dim=1)
+
+        object_features_attention = []
+        for i in range(self.n_obj):
+            obj_features_att = torch.mul(object_features[i], h_cast[:, int(state_body.shape[1]):])
+            object_features_attention.append(obj_features_att)
+        state_body_attention = torch.mul(state_body, h_cast[:, :int(state_body.shape[1])])
+
+        # compute the reward output for each object
+
+        logits_obj = []
+        for i in range(self.n_obj):
+            input_reward_func = torch.cat(tensors=(state_body_attention, object_features_attention[i]), dim=1)
+            reward_current = self.sigmoid(self.fc_reward(input_reward_func))
+            logits_obj.append(reward_current)
+
+        return logits_obj
