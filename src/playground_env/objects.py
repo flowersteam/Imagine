@@ -296,7 +296,7 @@ class Thing:
 
         color = tuple(self.rgb_code * 255)
         # pygame.draw.rect(self.icon, color, (0, 0, self.size_pixels - 1, self.size_pixels - 1), 6)
-        self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+        self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
         self.surface = self.icon.copy()
         self._color_surface(self.surface, color)
         viewer.blit(self.surface,(left,top))
@@ -378,7 +378,7 @@ class Dog(Animals):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'dog.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Cat(Animals):
@@ -386,7 +386,7 @@ class Cat(Animals):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'cat.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Human(Animals):
@@ -394,7 +394,7 @@ class Human(Animals):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'human.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Fly(Animals):
@@ -402,7 +402,7 @@ class Fly(Animals):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'fly.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Parrot(Animals):
@@ -410,7 +410,7 @@ class Parrot(Animals):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'parrot.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Mouse(Animals):
@@ -418,7 +418,7 @@ class Mouse(Animals):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'mouse.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Lion(Animals):
@@ -426,7 +426,7 @@ class Lion(Animals):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'lion.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Pig(Animals):
@@ -434,7 +434,7 @@ class Pig(Animals):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'pig.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Cow(Animals):
@@ -442,7 +442,7 @@ class Cow(Animals):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'cow.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Cameleon(Animals):
@@ -450,7 +450,7 @@ class Cameleon(Animals):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'cameleon.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 # # # # # # # # # # # # # # # # # #
@@ -462,7 +462,7 @@ class Cactus(Plants):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'cactus.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Rose(Plants):
@@ -470,7 +470,7 @@ class Rose(Plants):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'rose.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Grass(Plants):
@@ -478,7 +478,7 @@ class Grass(Plants):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'grass.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Bonsai(Plants):
@@ -486,7 +486,7 @@ class Bonsai(Plants):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'bonsai.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Algae(Plants):
@@ -494,7 +494,7 @@ class Algae(Plants):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'algae.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Carnivorous(Plants):
@@ -502,7 +502,7 @@ class Carnivorous(Plants):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'carnivorous.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Tree(Plants):
@@ -510,7 +510,7 @@ class Tree(Plants):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'tree.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Bush(Plants):
@@ -518,7 +518,7 @@ class Bush(Plants):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'bush.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Tea(Plants):
@@ -526,7 +526,7 @@ class Tea(Plants):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'tea.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Flower(Plants):
@@ -534,7 +534,7 @@ class Flower(Plants):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'flower.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 # # # # # # # # # # # # # # # # # #
@@ -546,7 +546,7 @@ class Chair(Furnitures):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'chair.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Sofa(Furnitures):
@@ -554,7 +554,7 @@ class Sofa(Furnitures):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'sofa.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Sink(Furnitures):
@@ -562,7 +562,7 @@ class Sink(Furnitures):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'sink.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Window(Furnitures):
@@ -570,7 +570,7 @@ class Window(Furnitures):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'window.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Carpet(Furnitures):
@@ -578,7 +578,7 @@ class Carpet(Furnitures):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'carpet.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Cupboard(Furnitures):
@@ -586,7 +586,7 @@ class Cupboard(Furnitures):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'cupboard.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Desk(Furnitures):
@@ -594,7 +594,7 @@ class Desk(Furnitures):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'desk.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Lamp(Furnitures):
@@ -602,7 +602,7 @@ class Lamp(Furnitures):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'lamp.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Door(Furnitures):
@@ -610,7 +610,7 @@ class Door(Furnitures):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'door.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Table(Furnitures):
@@ -618,7 +618,7 @@ class Table(Furnitures):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'table.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 # # # # # # # # # # # # # # # # # #
 # Supply
@@ -630,7 +630,7 @@ class Water(Supplies):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'water.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 class Food(Supplies):
@@ -638,7 +638,7 @@ class Food(Supplies):
         super().__init__(object_descr, object_id_int, params)
         if params['render_mode']:
             self.icon = pygame.image.load(self.img_path + 'food.png')
-            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)).convert_alpha()
+            self.icon = pygame.transform.scale(self.icon, (self.size_pixels, self.size_pixels)) 
 
 
 obj_type_to_obj = dict(dog=Dog,

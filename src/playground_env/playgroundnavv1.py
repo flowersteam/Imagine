@@ -6,6 +6,7 @@ import pygame
 from src.playground_env.objects import generate_objects
 from src.playground_env.env_params import get_env_params
 
+
 class PlayGroundNavigationV1(gym.Env):
     metadata = {
         'render.modes': ['human', 'rgb_array'],
@@ -17,20 +18,22 @@ class PlayGroundNavigationV1(gym.Env):
         set reward_screen to True to visualize modular reward function predictions
         set viz_data_collection to True to visualize Social Partner interactions 
     '''
+
     def __init__(self,
                  max_timesteps=50,
                  random_init=False,
                  human=False,
                  reward_screen=False,
                  viz_data_collection=False,
-
+                 display=True,
                  agent_step_size=0.15,
-                 agent_initial_pos=(0,0),
+                 agent_initial_pos=(0, 0),
                  agent_initial_pos_range=0.6,
                  max_nb_objects=3,  # number of objects in the scene
                  random_nb_obj=False,
                  admissible_actions=('Move', 'Grasp', 'Grow'),  # which types of actions are admissible
-                 admissible_attributes=('colors', 'categories', 'types'),#, 'relative_sizes', 'shades', 'relative_shades', 'sizes', 'relative_positions'),
+                 admissible_attributes=('colors', 'categories', 'types'),
+                 # , 'relative_sizes', 'shades', 'relative_shades', 'sizes', 'relative_positions'),
                  # which object attributes
                  # can be used
                  min_max_sizes=((0.2, 0.25), (0.25, 0.3)),  # ranges of sizes of objects (small and large ones)
@@ -69,7 +72,7 @@ class PlayGroundNavigationV1(gym.Env):
         self.SP_feedback = False
         self.known_goals_update = False
         self.known_goals_descr = []
-
+        self.display = display
         self.circles = [[x * 3, 200, x * 4] for x in range(50)]
 
         self.random_init = random_init
@@ -82,9 +85,9 @@ class PlayGroundNavigationV1(gym.Env):
         self.nb_obj = self.params['max_nb_objects']
         self.dim_obj = self.params['dim_obj_features']
         self.dim_body = self.params['dim_body_features']
-        self.inds_objs = [np.arange(self.dim_body  + self.dim_obj * i_obj, self.dim_body + self.dim_obj * (i_obj + 1))
+        self.inds_objs = [np.arange(self.dim_body + self.dim_obj * i_obj, self.dim_body + self.dim_obj * (i_obj + 1))
                           for i_obj in range(self.nb_obj)]
-        
+
         self.half_dim_obs = self.max_nb_objects * self.dim_obj + self.dim_body
         self.dim_obs = int(2 * self.half_dim_obs)
 
@@ -107,10 +110,16 @@ class PlayGroundNavigationV1(gym.Env):
         self.logits_concat = (0 for _ in range(self.nb_obj))
         if self.render_mode:
             pygame.init()
-            if self.reward_screen:
-                self.viewer = pygame.display.set_mode((self.screen_size + 300, self.screen_size))
+            if self.display:
+                if self.reward_screen:
+                    self.viewer = pygame.display.set_mode((self.screen_size + 300, self.screen_size))
+                else:
+                    self.viewer = pygame.display.set_mode((self.screen_size, self.screen_size))
             else:
-                self.viewer = pygame.display.set_mode((self.screen_size, self.screen_size))
+	            if self.reward_screen:
+	                self.viewer = pygame.Surface((self.screen_size + 300, self.screen_size))
+	            else:
+	                self.viewer = pygame.Surface((self.screen_size, self.screen_size))
             self.viewer_started = False
         self.background = None
 
@@ -120,7 +129,6 @@ class PlayGroundNavigationV1(gym.Env):
         self.observation = None
         self.initial_observation = None
         self.done = None
-
 
     def regularize_type_and_attribute(self, object):
         if object['categories'] is None and object['types'] is not None:
@@ -145,14 +153,13 @@ class PlayGroundNavigationV1(gym.Env):
                     o[k] = np.random.choice(self.attributes[k])
         return objects_decr.copy()
 
-
     def reset_with_goal(self, goal_str):
         words = goal_str.split(' ')
         objs = []
 
         if words[0] == 'Grow':
-            obj_to_be_grown = dict(zip(self.adm_abs_attributes, [None for _ in range(len(self.adm_abs_attributes))] ))
-            obj_supply = dict(zip(self.adm_abs_attributes, [None for _ in range(len(self.adm_abs_attributes))] ))
+            obj_to_be_grown = dict(zip(self.adm_abs_attributes, [None for _ in range(len(self.adm_abs_attributes))]))
+            obj_supply = dict(zip(self.adm_abs_attributes, [None for _ in range(len(self.adm_abs_attributes))]))
 
             # first add the object that should be grown
             for w in words[1:]:
@@ -165,7 +172,8 @@ class PlayGroundNavigationV1(gym.Env):
             objs.append(obj_to_be_grown.copy())
 
             # now sample the supply
-            if obj_to_be_grown['categories'] in ['living_thing', 'plant'] or obj_to_be_grown['types'] in self.categories['plant']:
+            if obj_to_be_grown['categories'] in ['living_thing', 'plant'] or obj_to_be_grown['types'] in \
+                    self.categories['plant']:
                 obj_supply.update(dict(types='water',
                                        categories='supply'))
             else:
@@ -173,7 +181,7 @@ class PlayGroundNavigationV1(gym.Env):
             objs.append(obj_supply.copy())
 
         else:
-            obj = dict(zip(self.adm_abs_attributes, [None for _ in range(len(self.adm_abs_attributes))] ))
+            obj = dict(zip(self.adm_abs_attributes, [None for _ in range(len(self.adm_abs_attributes))]))
             for w in words[1:]:
                 for k in self.adm_abs_attributes:
                     if w in self.attributes[k]:
@@ -215,7 +223,6 @@ class PlayGroundNavigationV1(gym.Env):
                                                    self.object_grasped,
                                                    np.zeros([self.dim_act]))
 
-
         # construct vector of observations
         self.observation = np.zeros(self.dim_obs)
         self.observation[:self.half_dim_obs] = self.observe()
@@ -225,8 +232,10 @@ class PlayGroundNavigationV1(gym.Env):
         return self.observation.copy()
 
     def get_pixel_coordinates(self, xpos, ypos):
-        return ((xpos + 1) / 2 * (self.params['screen_size'] * 2 / 3) + 1 / 6 * self.params['screen_size']).astype(np.int), \
-               ((-ypos + 1) / 2 * (self.params['screen_size'] * 2 / 3) + 1 / 6 * self.params['screen_size']).astype(np.int)
+        return ((xpos + 1) / 2 * (self.params['screen_size'] * 2 / 3) + 1 / 6 * self.params['screen_size']).astype(
+            np.int), \
+               ((-ypos + 1) / 2 * (self.params['screen_size'] * 2 / 3) + 1 / 6 * self.params['screen_size']).astype(
+                   np.int)
 
     def sample_objects(self, objects_to_add):
         object_descr = objects_to_add if objects_to_add is not None else []
@@ -292,7 +301,6 @@ class PlayGroundNavigationV1(gym.Env):
                                                    self.object_grasped,
                                                    action)
 
-
         self.observation[:self.half_dim_obs] = self.observe()
         self.observation[self.half_dim_obs:] = self.observation[:self.half_dim_obs] - self.initial_observation
 
@@ -322,10 +330,10 @@ class PlayGroundNavigationV1(gym.Env):
             self.viewer.blit(goal_txt_surface, (800 + 150 - goal_txt_surface.get_width() // 2, 50))
 
             cross_icon = pygame.image.load(self.params['img_path'] + 'cross.png')
-            cross_icon = pygame.transform.scale(cross_icon, (50, 50)).convert_alpha()
+            cross_icon = pygame.transform.scale(cross_icon, (50, 50))
 
             tick_icon = pygame.image.load(self.params['img_path'] + 'tick.png')
-            tick_icon = pygame.transform.scale(tick_icon, (50, 50)).convert_alpha()
+            tick_icon = pygame.transform.scale(tick_icon, (50, 50))
 
             if any(logit > 0.5 for logit in self.logits_concat):
                 self.viewer.blit(tick_icon, (800 + 125, 75))
@@ -333,7 +341,7 @@ class PlayGroundNavigationV1(gym.Env):
                 self.viewer.blit(cross_icon, (800 + 125, 75))
             for i_obj, object in enumerate(self.objects):
                 object_surface = object.surface
-                object_surface = pygame.transform.scale(object_surface, (80, 80)).convert_alpha()
+                object_surface = pygame.transform.scale(object_surface, (80, 80))
                 self.viewer.blit(object_surface, (900, 150 + 200 * i_obj))
                 circle_img = pygame.Surface((20, 20))
                 for x in self.circles:
@@ -351,10 +359,10 @@ class PlayGroundNavigationV1(gym.Env):
         size_gripper_pixels = 55
         size_gripper_closed_pixels = 45
         gripper_icon = pygame.image.load(self.params['img_path'] + 'hand_open.png')
-        gripper_icon = pygame.transform.scale(gripper_icon, (size_gripper_pixels, size_gripper_pixels)).convert_alpha()
+        gripper_icon = pygame.transform.scale(gripper_icon, (size_gripper_pixels, size_gripper_pixels))
         closed_gripper_icon = pygame.image.load(self.params['img_path'] + 'hand_closed.png')
         closed_gripper_icon = pygame.transform.scale(closed_gripper_icon,
-                                                     (size_gripper_closed_pixels, size_gripper_pixels)).convert_alpha()
+                                                     (size_gripper_closed_pixels, size_gripper_pixels))
         if self.gripper_state == 1:
             left = int(x - size_gripper_closed_pixels // 2)
             top = int(y - size_gripper_closed_pixels // 2)
@@ -371,7 +379,7 @@ class PlayGroundNavigationV1(gym.Env):
 
                 speech_bubble_icon = pygame.image.load(self.params['img_path'] + 'bubble.png')
                 speech_bubble_icon = pygame.transform.scale(speech_bubble_icon,
-                                                            (txt_surface.get_width() + 50, 120)).convert_alpha()
+                                                            (txt_surface.get_width() + 50, 120))
                 off_set_bubble = int(1.2 * size_gripper_pixels)
                 bubble_x = x - off_set_bubble // 2
                 bubble_y = y - 2 * off_set_bubble
@@ -383,7 +391,7 @@ class PlayGroundNavigationV1(gym.Env):
             known_goals_txt = FONT.render('Known Goals', True, pygame.Color('darkblue'))
             known_goals_icon = pygame.image.load(self.params['img_path'] + 'known_goals_box.png')
             known_goals_icon = pygame.transform.scale(known_goals_icon,
-                                                      (300, 35 + 25 * len(self.known_goals_descr))).convert_alpha()
+                                                      (300, 35 + 25 * len(self.known_goals_descr)))
             self.viewer.blit(known_goals_icon, (50, 50))
             self.viewer.blit(known_goals_txt, (75, 60))
             for i, descr in enumerate(self.known_goals_descr):
@@ -393,14 +401,14 @@ class PlayGroundNavigationV1(gym.Env):
             if self.SP_feedback == True:
                 # SOCIAL PEER
                 SP_head_icon = pygame.image.load(self.params['img_path'] + 'SP_head.png')
-                SP_head_icon = pygame.transform.scale(SP_head_icon, (80, 80)).convert_alpha()
+                SP_head_icon = pygame.transform.scale(SP_head_icon, (80, 80))
                 SP_x = 50
                 SP_y = 700
                 self.viewer.blit(SP_head_icon, (SP_x, SP_y))
                 SP_txt_surface = FONT.render('You ' + 'g' + self.SP_goal_descr[1:], True, pygame.Color('black'))
                 SP_bubble_icon = pygame.image.load(self.params['img_path'] + 'SP_bubble.png')
                 SP_bubble_icon = pygame.transform.scale(SP_bubble_icon,
-                                                        (SP_txt_surface.get_width() + 50, 80)).convert_alpha()
+                                                        (SP_txt_surface.get_width() + 50, 80))
                 self.viewer.blit(SP_bubble_icon, (SP_x + 70, SP_y - 25))
                 self.viewer.blit(SP_txt_surface, (SP_x + 100, SP_y))
 
@@ -409,7 +417,7 @@ class PlayGroundNavigationV1(gym.Env):
                     if self.SP_goal_descr not in self.known_goals_descr:
                         known_goals_icon = pygame.transform.scale(known_goals_icon,
                                                                   (300, 35 + 25 * (1 + len(
-                                                                      self.known_goals_descr)))).convert_alpha()
+                                                                      self.known_goals_descr))))
                         self.viewer.blit(known_goals_icon, (50, 50))
                         self.viewer.blit(known_goals_txt, (75, 60))
                         for i, descr in enumerate(self.known_goals_descr):
@@ -426,9 +434,9 @@ class PlayGroundNavigationV1(gym.Env):
                             goal_txt_surface = FONT.render(self.SP_goal_descr, True, pygame.Color('black'))
                             self.viewer.blit(goal_txt_surface,
                                              (100, SP_y - int(self.progress_goal_move * (SP_y - 100)) - 15))
-
-        pygame.display.update()
-        pygame.time.wait(50)
+        if self.display:
+            pygame.display.update()
+            pygame.time.wait(50)
 
     def set_SP_feedback(self, goal_descr):
         self.SP_feedback = True
