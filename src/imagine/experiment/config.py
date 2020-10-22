@@ -34,12 +34,14 @@ DEFAULT_CONFIG = dict(experiment_params=dict(trial_id=0,
                                              n_batches=50,  # number of updates per cycle
                                              n_cpus=6,  # number of mpi threads
                                              seed=np.random.randint(int(1e6)),
-                                             policy_save_interval=10,  # the interval with which policy pickles are saved (in epochs)
+                                             policy_save_interval=10,
+                                             # the interval with which policy pickles are saved (in epochs)
                                              save_obs=False,  # whether to save observation to build a dataset
                                              method_test='robin'  # test all instructions one after the other
                                              ),
                       conditions=dict(env_name='PlaygroundNavigation-v1',
-                                      policy_architecture='modular_attention',  # 'flat_concat', 'flat_attention', 'modular_attention'
+                                      policy_architecture='modular_attention',
+                                      # 'flat_concat', 'flat_attention', 'modular_attention'
                                       imagination_method='CGH',
                                       policy_encoding='lstm',  # policy encoding
                                       reward_checkpoint='',  # filepath of reward function checkpoint
@@ -49,10 +51,12 @@ DEFAULT_CONFIG = dict(experiment_params=dict(trial_id=0,
                                       feedback_strategy='exhaustive',  # 'exhaustive' or  'one_pos_one_neg'
                                       p_social_partner_availability=1,  # probability for SP to be present
                                       rl_positive_ratio=.5,  # ratio of positive examples in policy batches
-                                      reward_positive_ratio=.2  # ratio of positive examples per goal in reward function batches
+                                      reward_positive_ratio=.2
+                                      # ratio of positive examples per goal in reward function batches
                                       ),
                       # learning parameters of DDPG, from OpenAI Baselines HER implementation
-                      learning_params=dict(algo='ddpg',  # choice of underlying learning algorithm (ddpg or td3 supported so far)
+                      learning_params=dict(algo='ddpg',
+                                           # choice of underlying learning algorithm (ddpg or td3 supported so far)
                                            normalize_obs=False,  # whether observation are normalized by running stats
                                            norm_eps=0.01,  # epsilon used for observation normalization
                                            norm_clip=5,  # normalized observations are cropped to this values
@@ -92,8 +96,7 @@ if USE_LOCAL_CONFIG:
 
 def configure_everything(rank, seed, num_cpu, env, trial_id, n_epochs, reward_function, policy_encoding,
                          feedback_strategy, policy_architecture, goal_invention, reward_checkpoint,
-                         rl_positive_ratio, p_partner_availability, imagination_method, git_commit=''):
-
+                         rl_positive_ratio, p_partner_availability, imagination_method, git_commit='', display=True):
     # Seed everything
     rank_seed = seed + 1000000 * rank
     set_global_seeds(rank_seed)
@@ -107,8 +110,7 @@ def configure_everything(rank, seed, num_cpu, env, trial_id, n_epochs, reward_fu
 
     # Env generating function
     def make_env():
-        return gym.make(params['conditions']['env_name'])
-
+        return gym.make(params['conditions']['env_name'], display=display)
 
     # Get info from environment and configure dimensions dict
     tmp_env = make_env()
@@ -166,15 +168,15 @@ def configure_everything(rank, seed, num_cpu, env, trial_id, n_epochs, reward_fu
 
     # checks
     if params['conditions']['policy_architecture'] in ['modular_attention', 'attention']:
-        error_msg =  'You need an lstm policy encoding and reward is you use {}'.format(params['conditions']['policy_architecture'])
+        error_msg = 'You need an lstm policy encoding and reward is you use {}'.format(
+            params['conditions']['policy_architecture'])
         assert params['conditions']['policy_encoding'] == 'lstm', error_msg
         assert params['conditions']['reward_function'] in ['pretrained', 'learned_lstm'], error_msg
     elif params['conditions']['reward_function'] == 'oracle':
-        error_msg =  'You cannot use an lstm policy encoding if you use an oracle reward'
+        error_msg = 'You cannot use an lstm policy encoding if you use an oracle reward'
         assert params['conditions']['policy_encoding'] != 'lstm', error_msg
-        error_msg =  'You can only use a flat_concat policy architecture if you use an oracle reward'
+        error_msg = 'You can only use a flat_concat policy architecture if you use an oracle reward'
         assert params['conditions']['policy_architecture'] == 'flat_concat', error_msg
-
 
     # Update experiment parameters from arguments or variables defined in train.py
     params['experiment_params'].update(n_epochs=n_epochs,
@@ -188,7 +190,6 @@ def configure_everything(rank, seed, num_cpu, env, trial_id, n_epochs, reward_fu
     # Define social partner params
     params['social_partner_params'] = dict(feedback_strategy=feedback_strategy,
                                            p_availability=p_partner_availability)
-
 
     if params['conditions']['policy_encoding'] == 'lstm':
         dim_encoding = params['reward_function']['num_hidden_lstm']
@@ -230,7 +231,8 @@ def configure_everything(rank, seed, num_cpu, env, trial_id, n_epochs, reward_fu
     params['evaluation_rollout_params']['rollout_batch_size'] = 1
 
     params['repo_path'] = REPO_PATH
-    params['lstm_reward_checkpoint_path'] = REPO_PATH + '/src/data/lstm_checkpoints/{}'.format(params['conditions']['reward_checkpoint'])
+    params['lstm_reward_checkpoint_path'] = REPO_PATH + '/src/data/lstm_checkpoints/{}'.format(
+        params['conditions']['reward_checkpoint'])
     params['or_params_path'] = dict()
     for n_obj in [3]:
         params['or_params_path'][n_obj] = REPO_PATH + '/src/data/or_function/or_params_{}objs.pk'.format(n_obj)
@@ -245,6 +247,7 @@ def configure_everything(rank, seed, num_cpu, env, trial_id, n_epochs, reward_fu
             logger.info('{}: {}'.format(key, params[key]))
 
     return params, rank_seed
+
 
 def get_one_hot_encoder(all_descriptions):
     _, max_seq_length, word_set = analyze_descr(all_descriptions)
@@ -303,7 +306,8 @@ def configure_her(params, reward_function, goal_sampler):
     sample_her_transitions = make_sample_her_transitions_biased(goal_sampler=goal_sampler,
                                                                 goal_invention=params['conditions']['goal_invention'],
                                                                 p_imagined=params['conditions']['p_imagined'],
-                                                                rl_positive_ratio=params['conditions']['rl_positive_ratio'],
+                                                                rl_positive_ratio=params['conditions'][
+                                                                    'rl_positive_ratio'],
                                                                 reward_fun=reward_fun)
 
     return sample_her_transitions

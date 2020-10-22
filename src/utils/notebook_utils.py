@@ -37,7 +37,8 @@ def get_params_for_notebook(path):
                                                     p_partner_availability=params['conditions'][
                                                         'p_social_partner_availability'],
                                                     imagination_method=params['conditions']['imagination_method'],
-                                                    git_commit='')
+                                                    git_commit='',
+                                                    display=False)
     return params
 
 
