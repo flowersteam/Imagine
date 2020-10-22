@@ -82,6 +82,23 @@ class Actor(nn.Module):
     def get_attention(self, g):
         return self.sigmoid(self.fc_cast(g))
 
+    def get_norm_per_object(self, o , g):
+        attention = F.sigmoid(self.fc_cast(g))
+        obs_body = torch.cat(tensors=[o[:, :self.inds_objs[0][0]],
+                                      o[:, self.half_o: self.half_o + self.inds_objs[0][0]]], dim=1)
+        norms_per_object = []
+        for i in range(self.n_objs):
+            obs_obj = torch.cat(tensors=[o[:, self.inds_objs[i][0]: self.inds_objs[i][-1] + 1],
+                                         o[:,
+                                         self.inds_objs[i][0] + self.half_o: self.inds_objs[i][-1] + 1 + self.half_o]],
+                                dim=1)
+            body_obj_input = torch.cat(dim=1, tensors=[obs_body, obs_obj])
+            deepset_input = torch.mul(body_obj_input, attention)
+
+            norms_per_object.append(torch.mean(F.relu(self.fc_actor(deepset_input))))
+        return norms_per_object
+
+
     def load_from_tf_params(self, params_dict, name='main'):
         self.fc_cast.fc_layers[0].weight = torch.nn.Parameter(
             torch.tensor(np.transpose(params_dict['ddpg/{}/pi/attention_0/kernel:0'.format(name)]),
