@@ -49,8 +49,6 @@ class SocialPartner:
         pos = [random.choice(all_goals_reached_str[i]) for i in range(len(episodes))]
         all_neg = [set(self.goal_sampler.feedback_memory['string']) - set(all_goals_reached_str[i]) for i in range(len(episodes))]
         neg = [random.choice(list(all_neg[i])) for i in range(len(episodes))]
-        print('pos', pos)
-        print('neg', neg)
         return pos, neg
 
     def get_exhaustive_feedback_playground(self, episode):
