@@ -31,7 +31,7 @@ GOAL_INVENTION = 'from_epoch_10'
 SOCIAL_STRATEGY = 'exhaustive'
 P_PARTNER_AVAIL = 1
 RL_RATIO_POSITIVE = 0.5
-REWARD_CHECKPOINT = 'model_0.pk' # 'pre_trained/reward_func_checkpoint_270'
+REWARD_CHECKPOINT = 'model_0.pk'  # 'pre_trained/reward_func_checkpoint_270'
 
 
 def train(policy, training_worker, evaluation_worker, data_processor, goal_sampler, eval_goal_sampler, reward_function,
@@ -94,7 +94,6 @@ def train(policy, training_worker, evaluation_worker, data_processor, goal_sampl
                 feedbacks_str = None
             time_tracker.add(time_social_partner=time.time() - timee)
 
-
             # # # # # #
             # Process data
             # # # # # #
@@ -151,7 +150,8 @@ def train(policy, training_worker, evaluation_worker, data_processor, goal_sampl
 
         for _ in range(n_test_rollouts):
             # Sample goal for evaluation
-            exploit, goals_str, goals_encodings, goals_ids = eval_goal_sampler.sample(method=params['experiment_params']['method_test'])
+            exploit, goals_str, goals_encodings, goals_ids = eval_goal_sampler.sample(
+                method=params['experiment_params']['method_test'])
             # Run evaluation rollouts
             episodes = evaluation_worker.generate_rollouts(exploit=exploit,
                                                            imagined=False,
@@ -212,6 +212,7 @@ def launch(**kwargs):
 
     # Define the social partner
     social_partner = SocialPartner(oracle_reward_function=oracle_reward_function,
+                                   goal_sampler=goal_sampler,
                                    **params['social_partner_params'],
                                    params=params)
 
@@ -269,16 +270,20 @@ if __name__ == '__main__':
     add('--trial_id', type=int, default='333', help='trial identifier, name of the saving folder')
     add('--num_cpu', type=int, default=NUM_CPU, help='the number of CPU cores to use (using MPI)')
     add('--n_epochs', type=int, default=NB_EPOCHS, help='the number of training epochs to run')
-    add('--reward_function', type=str, default=REW_FUNC, help="reward function to use, 'learned', 'oracle' or 'pretrained'")
-    add('--seed', type=int, default=np.random.randint(int(1e6)), help='the random seed used to seed both the environment and the training code')
-    add('--feedback_strategy', type=str, default=SOCIAL_STRATEGY, help="Strategy to use to provide positive feedback to the classifier 'exhaustive', 'one_pos_one_neg'")
+    add('--reward_function', type=str, default=REW_FUNC,
+        help="reward function to use, 'learned', 'oracle' or 'pretrained'")
+    add('--seed', type=int, default=np.random.randint(int(1e6)),
+        help='the random seed used to seed both the environment and the training code')
+    add('--feedback_strategy', type=str, default=SOCIAL_STRATEGY,
+        help="Strategy to use to provide positive feedback to the classifier 'exhaustive', 'one_pos_one_neg'")
     add('--git_commit', default='', type=str, help="git commit")
     add('--rl_positive_ratio', default=RL_RATIO_POSITIVE, type=str, help="ratio of positive samples per instruction")
-    add('--policy_architecture', default=POLICY_ARCHITECTURE,  type=str,  help="'modular_attention', 'flat_concat', 'flat_attention'")
-    add('--policy_encoding', default=POLICY_ENCODING,  type=str,  help="'glove', 'one_hot', 'lstm'")
-    add('--goal_invention', default=GOAL_INVENTION,  type=str,  help="'from_epoch_x")
-    add('--reward_checkpoint', default=REWARD_CHECKPOINT,  type=str,  help="reward checkpoint file for pretrained")
-    add('--p_partner_availability', default=P_PARTNER_AVAIL,  type=float,  help="probability availability partner")
-    add('--imagination_method', default=IMAG_METHOD,  type=str,  help="CGH, low_precision, low_coverage, oracle, random")
+    add('--policy_architecture', default=POLICY_ARCHITECTURE, type=str,
+        help="'modular_attention', 'flat_concat', 'flat_attention'")
+    add('--policy_encoding', default=POLICY_ENCODING, type=str, help="'glove', 'one_hot', 'lstm'")
+    add('--goal_invention', default=GOAL_INVENTION, type=str, help="'from_epoch_x")
+    add('--reward_checkpoint', default=REWARD_CHECKPOINT, type=str, help="reward checkpoint file for pretrained")
+    add('--p_partner_availability', default=P_PARTNER_AVAIL, type=float, help="probability availability partner")
+    add('--imagination_method', default=IMAG_METHOD, type=str, help="CGH, low_precision, low_coverage, oracle, random")
     kwargs = vars(parser.parse_args())
     launch(**kwargs)
