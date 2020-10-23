@@ -28,7 +28,7 @@ class PlayGroundNavigationV1(gym.Env):
                  display=True,
                  agent_step_size=0.15,
                  agent_initial_pos=(0, 0),
-                 agent_initial_pos_range=0.8,
+                 agent_initial_pos_range=0.6,
                  max_nb_objects=3,  # number of objects in the scene
                  random_nb_obj=False,
                  admissible_actions=('Move', 'Grasp', 'Grow'),  # which types of actions are admissible
@@ -102,7 +102,10 @@ class PlayGroundNavigationV1(gym.Env):
         # Agent parameters
         self.agent_step_size = agent_step_size
         self.agent_initial_pos = agent_initial_pos
-        self.agent_initial_pos_range = agent_initial_pos_range
+        if self.display:
+            self.agent_initial_pos_range = agent_initial_pos_range
+        else:
+            self.agent_initial_pos_range = 0.8
 
         # rendering
         self.human = human

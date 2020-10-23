@@ -170,6 +170,9 @@ class RewardFunctionModel(torch.nn.Module):
                 filtered_params.append(param)
         return filtered_params
 
+    def get_attention_vector(self,h_lstm):
+        return self.sigmoid(self.fc_cast(h_lstm))
+
     def compute_logits_before_or(self, s, h_lstm):
         h_cast = self.sigmoid(self.fc_cast(h_lstm))
         # extract inputs for each object (and their delta)
