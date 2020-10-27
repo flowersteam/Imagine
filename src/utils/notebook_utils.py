@@ -14,7 +14,6 @@ import src.imagine.experiment.config as config
 from src.imagine.goal_sampler import GoalSampler
 
 
-
 def get_params_for_notebook(path):
     PARAMS_FILE = path + 'params.json'
     with open(PARAMS_FILE) as json_file:
@@ -91,7 +90,7 @@ def generate_animation_reward_module(env, goal_str, reward_language_model, rewar
     input_goal = torch.tensor(goal_encoding).float().view(1, len(goal_encoding))
     objects = [obj.object_descr['colors'] + ' ' + obj.object_descr['types'] for obj in env.objects]
 
-    for t in range(20):
+    for t in range(30):
         action = policy.get_actions(o, goal_encoding)
         o, _, _, _ = env.step(action)
         input_o = torch.tensor(o).float().view(1, len(o))
@@ -114,6 +113,7 @@ def generate_animation_reward_module(env, goal_str, reward_language_model, rewar
                                     repeat=False)
     return ani
 
+
 def generate_animation_policy_module(env, goal_str, reward_language_model, policy):
     fig = plt.figure()
     ax1 = fig.add_subplot(1, 2, 1)
@@ -131,7 +131,7 @@ def generate_animation_policy_module(env, goal_str, reward_language_model, polic
     input_goal = torch.tensor(goal_encoding).float().view(1, len(goal_encoding))
     objects = [obj.object_descr['colors'] + ' ' + obj.object_descr['types'] for obj in env.objects]
 
-    for t in range(20):
+    for t in range(30):
         action = policy.get_actions(o, goal_encoding)
         o, _, _, _ = env.step(action)
         input_o = torch.tensor(o).float().view(1, len(o))
@@ -155,8 +155,38 @@ def generate_animation_policy_module(env, goal_str, reward_language_model, polic
     return ani
 
 
+def plot_attention_vector(attention_vector, goal_str, params):
+    body_feat = ['Body X', 'Body Y', 'Body gripper']
+    obj_things = list(params['env_params']['name_attributes'])[:-5]
+    obj_feat = ['obj X', 'obj Y', 'obj size', 'obj R', 'obj G', 'obj B', 'obj gripper']
+    delta_body_feat = ['Δ ' + elem for elem in body_feat]
+    delta_obj_things = ['Δ ' + elem for elem in obj_things]
+    delta_obj_feat = ['Δ ' + elem for elem in obj_feat]
+
+    state_description = body_feat + delta_body_feat + obj_things + obj_feat + delta_obj_things + delta_obj_feat
+
+    def show_values(pc, state_description, fmt="%.2f", **kw):
+        pc.update_scalarmappable()
+        ax = pc.axes
+        for p, color, value in zip(pc.get_paths(), pc.get_facecolors(), state_description):
+            x, y = p.vertices[:-2, :].mean(0)
+            if np.all(color[:3] > 0.5):
+                color = (0.0, 0.0, 0.0)
+            else:
+                color = (1.0, 1.0, 1.0)
+            ax.text(x, y, value, ha="center", va="center", color=color, **kw)
+
+    fig = plt.figure(figsize=(6, 12))
+    attention_vector = attention_vector.reshape([len(state_description), 1])
+    c = plt.pcolor(attention_vector)
+    plt.title(goal_str)
+    plt.colorbar()
+    show_values(c, state_description)
+    fig.tight_layout()
+
+
 def plot_tsne(X_embedded, descr, code, params):
-    fig = plt.figure()
+    fig = plt.figure(figsize=(14,14))
     ax = fig.add_subplot(111)
     sc = ax.scatter(X_embedded[:, 0], X_embedded[:, 1], picker=5)
     normal_colors = [[0, 0.447, 0.7410], [0.85, 0.325, 0.098], [0.466, 0.674, 0.188], [0.929, 0.694, 0.125],
