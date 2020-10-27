@@ -1,20 +1,22 @@
 # Welcome to the IMAGINE repository
 
+-----------------
+
 ## Requirements
-------------------
+
 The dependencies are listed in the requirements.txt file. Our conda environment can be cloned with:
 ```
 conda env create -f environment.yml
 ```
 
 ## Notebook
-----------------
+
 
 We propose a [Google Colab Notebook](https://colab.research.google.com/drive/1G9LmvhbvR40XJ-cysgP6zynBnq_fHY63#scrollTo=HmGFArOeXvps) to walk you through the IMAGINE learning algorithm. 
 
 
 ## Demo
------------------
+
 1. Run pre-trained weights
 
 The demo script is /src/imagine/experiments/play.py. It can be used as such:
@@ -22,7 +24,7 @@ The demo script is /src/imagine/experiments/play.py. It can be used as such:
 ```python play.py```
 
 ## RL training
------------------
+
 
 1. Running the algorithm
 
