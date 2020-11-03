@@ -17,7 +17,11 @@ We follow a developmental approach inspired by the role of egocentric language i
 ## Notebook
 
 
-We propose a [Google Colab Notebook](https://colab.research.google.com/drive/1G9LmvhbvR40XJ-cysgP6zynBnq_fHY63#scrollTo=HmGFArOeXvps) to walk you through the IMAGINE learning algorithm. 
+We propose a [Google Colab Notebook](https://colab.research.google.com/drive/1G9LmvhbvR40XJ-cysgP6zynBnq_fHY63#scrollTo=HmGFArOeXvps) to walk you through the IMAGINE learning algorithm. The notebook contains:
+
+- a full decomposition of the IMAGINE architecture
+- visualizations of the modules' behavior during inference
+- interactive generations of rollouts conditioned on goal sentences
 
 ## Requirements
 
