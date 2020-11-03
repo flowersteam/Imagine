@@ -2,6 +2,8 @@
 
 -----------------
 
+## Introduction 
+
 Learning __open-ended repertoire__ of skills requires agents that autonomously explore their environments. To do so, they need to self-organize thier exploration by generating and selecting their goals ([IMGEP](https://arxiv.org/abs/1708.02190)). In this framework, how can agents make creative discoveries ?
 
 In this paper, we propose to equip agents with language grounding capabilities in order to represent goals as language. We then leverage language compositionality and systematic generalizaiton as a means to perform __out-of-distribution goal generation__.
@@ -50,3 +52,8 @@ Note that the number of cpu is an important parameter. Changing it is **not** eq
  2. Plotting results
  
  Results for one run can be plotted using the script /src/analyses/new_plot.py
+ 
+ ## Links
+ 
+The _Playground_ Environment used to conduct our expeirment is accesssible here: https://github.com/flowersteam/playground_env
+
