@@ -10,7 +10,7 @@ In this paper, we propose to equip agents with language grounding capabilities i
 
 
 <div style="text-align: center;">
-   <img src="image.jpg"/>
+   <img src="fig/thumbnail_v6.png"/>
 </div>
 
 We follow a developmental approach inspired by the role of egocentric language in child development ([Piaget](https://books.google.fr/books/about/The_Language_and_Thought_of_the_Child.html?id=WYoEXQLGRLEC&redir_esc=y) and [Vygotsky](https://www.marxists.org/archive/vygotsky/works/1934/tool-symbol.htm)) and generative expressivity ([Chomsky](https://books.google.fr/books?hl=en&lr=&id=SNeHkMXHcd8C&oi=fnd&pg=PR5&dq=noam+chomsky+syntactic+structures&ots=AW4uSxTupP&sig=o76nScH_zdA62OOimmxpwvNe8hs#v=onepage&q=noam%20chomsky%20syntactic%20structures&f=false)).
