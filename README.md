@@ -1,6 +1,13 @@
-# Welcome to the IMAGINE repository
+# IMAGINE: Language as a Cognitive Tool to Imagine Goals in Curiosity Driven Exploration
 
 -----------------
+
+Learning __open-ended repertoire__ of skills requires agents that autonomously explore their environments. To do so, agents self-organize thier exploration by generating and selecting their goals ([IMGEP](https://arxiv.org/abs/1708.02190)). In this framework, how can agents make creative discoveries ?
+
+In this paper, we propose to equip agents with language grounding capabilities in order to represent goal as language. We then leverage language compositionality and systematic generalizaiton as a means to perform __out-of-distribution goal generation__.
+
+<img src="https://drive.google.com/uc?id=1Xre-pH-r5lXaT9kv33zTIOLrnpUelgNy" width="600"/>
+
 
 ## Requirements
 
