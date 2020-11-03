@@ -2,12 +2,13 @@
 
 -----------------
 
-Learning __open-ended repertoire__ of skills requires agents that autonomously explore their environments. To do so, agents self-organize thier exploration by generating and selecting their goals ([IMGEP](https://arxiv.org/abs/1708.02190)). In this framework, how can agents make creative discoveries ?
+Learning __open-ended repertoire__ of skills requires agents that autonomously explore their environments. To do so, they need to self-organize thier exploration by generating and selecting their goals ([IMGEP](https://arxiv.org/abs/1708.02190)). In this framework, how can agents make creative discoveries ?
 
-In this paper, we propose to equip agents with language grounding capabilities in order to represent goal as language. We then leverage language compositionality and systematic generalizaiton as a means to perform __out-of-distribution goal generation__.
+In this paper, we propose to equip agents with language grounding capabilities in order to represent goals as language. We then leverage language compositionality and systematic generalizaiton as a means to perform __out-of-distribution goal generation__.
 
 ![](https://drive.google.com/uc?id=1Xre-pH-r5lXaT9kv33zTIOLrnpUelgNy)
 
+We follow a developmental approach inspired by the role of egocentric language in child development ([Piaget](https://books.google.fr/books/about/The_Language_and_Thought_of_the_Child.html?id=WYoEXQLGRLEC&redir_esc=y) and [Vygotsky](https://www.marxists.org/archive/vygotsky/works/1934/tool-symbol.htm)) and generative experssivity ([Chomsky](https://books.google.fr/books?hl=en&lr=&id=SNeHkMXHcd8C&oi=fnd&pg=PR5&dq=noam+chomsky+syntactic+structures&ots=AW4uSxTupP&sig=o76nScH_zdA62OOimmxpwvNe8hs#v=onepage&q=noam%20chomsky%20syntactic%20structures&f=false))
 
 ## Requirements
 
