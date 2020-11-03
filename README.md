@@ -2,7 +2,7 @@
 
 This repo contains the code base of the paper [Language as a Cognitive Tool to Imagine Goals inCuriosity-Driven Exploration](https://arxiv.org/pdf/2002.09253.pdf).
 
-## Introduction 
+## Context 
 
 Learning __open-ended repertoire__ of skills requires agents that autonomously explore their environments. To do so, they need to self-organize thier exploration by generating and selecting their goals ([IMGEP](https://arxiv.org/abs/1708.02190)). In this framework, how can agents make creative discoveries ?
 
