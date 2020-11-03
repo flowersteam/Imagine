@@ -6,7 +6,7 @@ This repo contains the code base of the paper [Language as a Cognitive Tool to I
 
 Learning __open-ended repertoire__ of skills requires agents that autonomously explore their environments. To do so, they need to self-organize their exploration by generating and selecting their goals ([IMGEP](https://arxiv.org/abs/1708.02190)). In this framework, how can agents make creative discoveries?
 
-In this paper, we propose to equip agents with language grounding capabilities in order to represent goals as language. We then leverage language compositionality and systematic generalizaiton as a means to perform __out-of-distribution goal generation__.
+In this paper, we propose to equip agents with language grounding capabilities in order to represent goals as language. We then leverage language compositionality and systematic generalization as a means to perform __out-of-distribution goal generation__.
 
 <p align="center">
 <img src="fig/thumbnail_v6.png"/>
