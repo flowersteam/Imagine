@@ -4,15 +4,14 @@ This repo contains the code base of the paper [Language as a Cognitive Tool to I
 
 ## Context 
 
-Learning __open-ended repertoire__ of skills requires agents that autonomously explore their environments. To do so, they need to self-organize thier exploration by generating and selecting their goals ([IMGEP](https://arxiv.org/abs/1708.02190)). In this framework, how can agents make creative discoveries ?
+Learning __open-ended repertoire__ of skills requires agents that autonomously explore their environments. To do so, they need to self-organize their exploration by generating and selecting their goals ([IMGEP](https://arxiv.org/abs/1708.02190)). In this framework, how can agents make creative discoveries?
 
 In this paper, we propose to equip agents with language grounding capabilities in order to represent goals as language. We then leverage language compositionality and systematic generalizaiton as a means to perform __out-of-distribution goal generation__.
 
+<img src="fig/thumbnail_v6.png" alt="Paris" class="center">
 
-![imagine_fig](fig/thumbnail_v6.png)
 
-
-We follow a developmental approach inspired by the role of egocentric language in child development ([Piaget](https://books.google.fr/books/about/The_Language_and_Thought_of_the_Child.html?id=WYoEXQLGRLEC&redir_esc=y) and [Vygotsky](https://www.marxists.org/archive/vygotsky/works/1934/tool-symbol.htm)) and generative experssivity ([Chomsky](https://books.google.fr/books?hl=en&lr=&id=SNeHkMXHcd8C&oi=fnd&pg=PR5&dq=noam+chomsky+syntactic+structures&ots=AW4uSxTupP&sig=o76nScH_zdA62OOimmxpwvNe8hs#v=onepage&q=noam%20chomsky%20syntactic%20structures&f=false))
+We follow a developmental approach inspired by the role of egocentric language in child development ([Piaget](https://books.google.fr/books/about/The_Language_and_Thought_of_the_Child.html?id=WYoEXQLGRLEC&redir_esc=y) and [Vygotsky](https://www.marxists.org/archive/vygotsky/works/1934/tool-symbol.htm)) and generative expressivity ([Chomsky](https://books.google.fr/books?hl=en&lr=&id=SNeHkMXHcd8C&oi=fnd&pg=PR5&dq=noam+chomsky+syntactic+structures&ots=AW4uSxTupP&sig=o76nScH_zdA62OOimmxpwvNe8hs#v=onepage&q=noam%20chomsky%20syntactic%20structures&f=false)).
 
 ## Requirements
 
@@ -59,4 +58,19 @@ Note that the number of cpu is an important parameter. Changing it is **not** eq
  
 - _Playground_ Environment code base: https://github.com/flowersteam/playground_env
 - Website: https://sites.google.com/view/imagine-drl
+
+## Citation
+
+'''
+@misc{colas2020language,
+      title={Language as a Cognitive Tool to Imagine Goals in Curiosity-Driven Exploration}, 
+      author={Cédric Colas and Tristan Karch and Nicolas Lair and Jean-Michel Dussoux and Clément Moulin-Frier and Peter Ford Dominey and Pierre-Yves Oudeyer},
+      year={2020},
+      eprint={2002.09253},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI}
+}
+
+'''
+
 
