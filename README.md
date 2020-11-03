@@ -1,5 +1,6 @@
 # IMAGINE: Language as a Cognitive Tool to Imagine Goals in Curiosity Driven Exploration
 
+This repo contains the code base of the paper [Language as a Cognitive Tool to Imagine Goals inCuriosity-Driven Exploration](https://arxiv.org/pdf/2002.09253.pdf)
 
 ## Introduction 
 
