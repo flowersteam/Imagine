@@ -55,5 +55,6 @@ Note that the number of cpu is an important parameter. Changing it is **not** eq
  
  ## Links
  
-The _Playground_ Environment used to conduct our expeirment is accesssible here: https://github.com/flowersteam/playground_env
+_Playground_ Environment code base: https://github.com/flowersteam/playground_env
+Website: https://sites.google.com/view/imagine-drl
 
