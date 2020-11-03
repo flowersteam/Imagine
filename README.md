@@ -1,6 +1,5 @@
 # IMAGINE: Language as a Cognitive Tool to Imagine Goals in Curiosity Driven Exploration
 
------------------
 
 ## Introduction 
 
