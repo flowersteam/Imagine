@@ -28,8 +28,6 @@ We propose a [Google Colab Notebook](https://colab.research.google.com/drive/1G9
 
 ## Demo
 
-1. Run pre-trained weights
-
 The demo script is /src/imagine/experiments/play.py. It can be used as such:
 
 ```python play.py```
@@ -37,7 +35,7 @@ The demo script is /src/imagine/experiments/play.py. It can be used as such:
 ## RL training
 
 
-1. Running the algorithm
+### Running the algorithm
 
 The main running script is /src/imagine/experiments/train.py. It can be used as such:
 
@@ -50,7 +48,7 @@ Note that the number of cpu is an important parameter. Changing it is **not** eq
  
  Logs and results are saved in /src/data/expe/PlaygroundNavigation-v1/trial_id/. It contains policy and reward function checkpoints, raw logs (log.txt), a csv containing main metrics (progress.csv) and a json file with the parameters (params.json).
  
- 2. Plotting results
+### Plotting results
  
  Results for one run can be plotted using the script /src/analyses/new_plot.py
  
@@ -61,7 +59,7 @@ Note that the number of cpu is an important parameter. Changing it is **not** eq
 
 ## Citation
 
-'''
+```
 @misc{colas2020language,
       title={Language as a Cognitive Tool to Imagine Goals in Curiosity-Driven Exploration}, 
       author={Cédric Colas and Tristan Karch and Nicolas Lair and Jean-Michel Dussoux and Clément Moulin-Frier and Peter Ford Dominey and Pierre-Yves Oudeyer},
@@ -70,7 +68,6 @@ Note that the number of cpu is an important parameter. Changing it is **not** eq
       archivePrefix={arXiv},
       primaryClass={cs.AI}
 }
-
-'''
+```
 
 
