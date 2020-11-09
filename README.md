@@ -64,13 +64,11 @@ Note that the number of cpu is an important parameter. Changing it is **not** eq
 ## Citation
 
 ```
-@misc{colas2020language,
-      title={Language as a Cognitive Tool to Imagine Goals in Curiosity-Driven Exploration}, 
-      author={Cédric Colas and Tristan Karch and Nicolas Lair and Jean-Michel Dussoux and Clément Moulin-Frier and Peter Ford Dominey and Pierre-Yves Oudeyer},
-      year={2020},
-      eprint={2002.09253},
-      archivePrefix={arXiv},
-      primaryClass={cs.AI}
+@article{colas2020language,
+	title={Language as a Cognitive Tool to Imagine Goals in Curiosity Driven Exploration},
+	author={Colas, Cédric and Karch, Tristan and Lair, Nicolas and Dussoux, Jean-Michel and Moulin-Frier, Clément and Dominey, F Peter and Oudeyer, Pierre-Yves},
+	journal={NeurIPS 2020},
+	year={2020}
 }
 ```
 
